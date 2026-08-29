@@ -1,0 +1,29 @@
+---
+// The site's one borrowed idea: every tool in the family shows a command in a
+// box and asks y or n before it runs. Installing a tool is previewed the same
+// way, and the copy button is the y key.
+const { title, command, soon = false, sigil = "$" } = Astro.props;
+const lines = command.split("\n");
+---
+
+<div class:list={["dialog", { "is-soon": soon }]}>
+  <div class="dialog-title">
+    <span class="lhs">{title}</span>
+    {soon && <span class="chip chip-unreleased">coming soon</span>}
+  </div>
+  <div class="dialog-body">
+    <pre><code>{lines.map((line, index) => (
+      <span>{index === 0 ? <span class="sigil">{sigil} </span> : <span class="sigil">  </span>}{line}{index < lines.length - 1 ? "\n" : ""}</span>
+    ))}</code></pre>
+    <button
+      type="button"
+      class="copy"
+      data-copy={command}
+      data-copied="false"
+      aria-label={`Copy: ${lines[0]}`}
+    >
+      <span class="key" aria-hidden="true">y</span>
+      <span data-copy-label>copy</span>
+    </button>
+  </div>
+</div>

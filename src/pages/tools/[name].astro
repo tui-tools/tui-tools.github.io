@@ -1,0 +1,456 @@
+---
+import Base from "../../layouts/Base.astro";
+import CommandDialog from "../../components/CommandDialog.astro";
+import catalog from "../../data/catalog.json";
+import { renderDescription, renderInline } from "../../lib/markdown.js";
+
+export function getStaticPaths() {
+  return catalog.tools.map((tool) => ({ params: { name: tool.name }, props: { tool } }));
+}
+
+const { tool } = Astro.props;
+const rest = tool.name.replace(/^tui-/, "");
+const security = tool.security;
+
+// The package managers are listed distro-first, but the pane that opens is the
+// first channel that actually works today: a reader should not land on a
+// command they cannot run. A remembered choice still overrides it.
+const openIndex = Math.max(
+  0,
+  tool.install.findIndex((entry) => entry.available),
+);
+
+function formatSize(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function formatDate(iso) {
+  if (!iso) return "";
+  return new Date(iso).toISOString().slice(0, 10);
+}
+
+// The security block, turned into the checklist a reader scans. "yes" is the
+// answer that costs them nothing; "no" is shown just as plainly.
+const checks = [
+  {
+    state: "yes",
+    label: "Preview, then confirm",
+    detail:
+      "Every change is shown as an exact command line and confirmed before it runs. The dialog and the runner receive the same value, so the preview cannot drift from what executes.",
+  },
+  {
+    state: security.needs_sudo === false ? "yes" : "info",
+    label: security.needs_sudo === false ? "Never escalates" : "Escalates for actions",
+    detail:
+      security.needs_sudo === false
+        ? "The tool never asks for root."
+        : security.needs_sudo,
+  },
+  {
+    state: security.no_daemon ? "yes" : "no",
+    label: security.no_daemon ? "No daemon, no state of its own" : "Leaves something running",
+    detail: security.no_daemon
+      ? "Nothing keeps running after you quit, and nothing is installed to run later. The system is the source of truth; the tool re-reads it after every change."
+      : "This tool installs or leaves a background process.",
+  },
+  {
+    state: security.no_network ? "yes" : "no",
+    label: security.no_network ? "No network access" : "Opens network connections",
+    detail: security.no_network
+      ? "The tool opens no network connection of its own. No telemetry, no update check, no phone home."
+      : security.no_network_note,
+  },
+  {
+    state: security.static_binary ? "yes" : "info",
+    label: security.static_binary ? "Static binary" : "Dynamically linked",
+    detail: security.static_binary
+      ? "Released statically linked, with no runtime dependencies to install."
+      : "The release needs runtime libraries present on the machine.",
+  },
+  {
+    state: security.signed_releases ? "yes" : "no",
+    label: security.signed_releases ? "Signed releases" : "Releases are not signed yet",
+    detail: security.signed_releases
+      ? "Release artifacts carry a signature you can verify."
+      : "Releases carry SHA-256 checksums but no signature. Verify the checksum, and read this as the open item it is.",
+  },
+];
+---
+
+<Base
+  title={tool.name}
+  description={tool.tagline}
+  accent="tool"
+  section="tools"
+  ogImage={tool.screenshots[0]?.src ?? "/brand/icon-256.png"}
+>
+  <div class="page">
+    <header class="tool-header">
+      {tool.icon && <img class="tool-icon" src={tool.icon} alt="" width="64" height="64" />}
+      <div style="flex:1 1 18rem">
+        <h1><span class="prefix">tui-</span>{rest}</h1>
+        <p>{tool.tagline}</p>
+      </div>
+      <div class="chips">
+        {
+          tool.release ? (
+            <span class="chip chip-version">{tool.release.tag}</span>
+          ) : (
+            <span class="chip chip-unreleased">unreleased</span>
+          )
+        }
+        <span class="chip chip-category">{tool.category}</span>
+        <span class="chip">{tool.license}</span>
+      </div>
+    </header>
+
+    <div class="split" style="padding-bottom:2rem">
+      <div class="stack">
+        {
+          tool.screenshots.length > 0 && (
+            <section aria-label="Screenshots" id="shots">
+              <figure class="shots-main" style="margin:0">
+                <img
+                  id="shot-image"
+                  src={tool.screenshots[0].src}
+                  alt={tool.screenshots[0].caption}
+                  width="1040"
+                  height="260"
+                />
+                <figcaption class="shots-caption" id="shot-caption">
+                  {tool.screenshots[0].caption}
+                </figcaption>
+              </figure>
+              {tool.screenshots.length > 1 && (
+                <div class="shots-strip" role="group" aria-label="Choose a screenshot">
+                  {tool.screenshots.map((shot, index) => (
+                    <button
+                      type="button"
+                      data-shot={shot.src}
+                      data-caption={shot.caption}
+                      aria-current={index === 0 ? "true" : "false"}
+                    >
+                      <img src={shot.src} alt={shot.caption} loading="lazy" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+          )
+        }
+
+        <section class="prose" aria-label="About">
+          <Fragment set:html={renderDescription(tool.description)} />
+        </section>
+
+        {
+          tool.keys.length > 0 && (
+            <section>
+              <div class="section-head" style="margin-bottom:1rem">
+                <h2>Keys</h2>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th scope="col">Key</th>
+                      <th scope="col">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tool.keys.map((entry) => (
+                      <tr>
+                        <td><span class="keycap">{entry.key}</span></td>
+                        <td>{entry.action}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p class="install-note">
+                Press <span class="keycap">?</span> inside the tool for the full help
+                screen, which is generated from the same action table as the key map.
+              </p>
+            </section>
+          )
+        }
+      </div>
+
+      <aside class="stack">
+        <section class="panel">
+          <h2>At a glance</h2>
+          <dl class="dl-inline">
+            <dt>Binary</dt>
+            <dd><code>{tool.binary}</code></dd>
+            <dt>Platforms</dt>
+            <dd>{tool.platforms.join(", ")}</dd>
+            {
+              tool.release && (
+                <>
+                  <dt>Latest</dt>
+                  <dd>
+                    <a href={tool.release.url} rel="noopener">{tool.release.tag}</a>,
+                    {" "}{formatDate(tool.release.publishedAt)}
+                  </dd>
+                </>
+              )
+            }
+            <dt>Since</dt>
+            <dd>{tool.since}</dd>
+            <dt>Source</dt>
+            <dd><a href={tool.repo} rel="noopener">{tool.repo.replace("https://github.com/", "")}</a></dd>
+            <dt>Config</dt>
+            <dd>
+              {security.config_paths.map((path) => (
+                <div><code>{path}</code></div>
+              ))}
+            </dd>
+          </dl>
+        </section>
+
+        <section class="panel">
+          <h2>Try it without a machine to risk</h2>
+          <p style="font-size:0.9rem;color:var(--muted);margin-bottom:0.85rem">
+            <code>--demo</code> runs against sample data. Every key works, every command
+            is built and previewed for real, and nothing touches your system.
+          </p>
+          <CommandDialog title="Demo mode" command={`${tool.binary} --demo`} />
+        </section>
+      </aside>
+    </div>
+
+    <section class="section" id="install" style="padding-top:1rem">
+      <div class="section-head">
+        <h2>Install</h2>
+      </div>
+
+      <div class="picker" role="tablist" aria-label="Choose your package manager">
+        {
+          tool.install.map((entry, index) => (
+            <button
+              type="button"
+              role="tab"
+              id={`tab-${entry.id}`}
+              data-install-tab={entry.id}
+              aria-controls={`pane-${entry.id}`}
+              aria-selected={index === openIndex ? "true" : "false"}
+              tabindex={index === openIndex ? "0" : "-1"}
+            >
+              <span class="dot" data-soon={String(!entry.available)} aria-hidden="true" />
+              {entry.label}
+            </button>
+          ))
+        }
+      </div>
+
+      {
+        tool.install.map((entry, index) => (
+          <div
+            class="install-pane"
+            role="tabpanel"
+            id={`pane-${entry.id}`}
+            data-install-pane={entry.id}
+            aria-labelledby={`tab-${entry.id}`}
+            hidden={index !== openIndex}
+          >
+            {!entry.available && (
+              <div class="soon-banner">
+                <span aria-hidden="true">!</span>
+                <p>
+                  Not published yet. The command is what it will be once the
+                  package repository at <code>pkgs.tui.tools</code> is live. Until
+                  then, use the static binary or build from source.
+                </p>
+              </div>
+            )}
+
+            {entry.requiresRepoSetup && (
+              <p class="install-note" style="margin:0 0 0.9rem">
+                Needs the tui-tools repository, a{" "}
+                <a href="/install/">one-time setup</a> you do once per machine.
+              </p>
+            )}
+
+            <div class="stack" style="--flow:0.9rem">
+              {entry.commands.map((command) => (
+                <CommandDialog
+                  title={
+                    command.arch
+                      ? `${entry.label} · linux/${command.arch}`
+                      : `${entry.label} · ${entry.package}`
+                  }
+                  command={command.command}
+                  soon={!entry.available}
+                />
+              ))}
+            </div>
+
+            {entry.note && <p class="install-note">{entry.note}</p>}
+          </div>
+        ))
+      }
+    </section>
+
+    <section class="section" id="security" style="padding-top:0">
+      <div class="section-head">
+        <h2>What it can do to your machine</h2>
+      </div>
+      <div class="split">
+        <ul class="checklist">
+          {
+            checks.map((check) => (
+              <li>
+                <span class="mark" data-state={check.state} aria-hidden="true">
+                  {check.state === "yes" ? "✓" : check.state === "no" ? "✕" : "•"}
+                </span>
+                <div>
+                  <span class="label">{check.label}</span>
+                  <p class="detail" set:html={renderInline(check.detail)} />
+                </div>
+              </li>
+            ))
+          }
+        </ul>
+        <div class="panel">
+          <h2>Reporting</h2>
+          <p style="font-size:0.9rem;color:var(--muted)">
+            Report a security issue privately, through GitHub's private vulnerability
+            reporting on the repository's Security tab. The family-wide policy, and
+            what counts as in scope, is on the <a href="/security/">security page</a>.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    {
+      tool.release && tool.release.assets.length > 0 && (
+        <section class="section" id="downloads" style="padding-top:0">
+          <div class="section-head">
+            <h2>Downloads</h2>
+            <span class="chip">{tool.release.tag} · {formatDate(tool.release.publishedAt)}</span>
+          </div>
+          <div class="table-wrap downloads">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">File</th>
+                  <th scope="col">Size</th>
+                  <th scope="col">SHA-256</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tool.release.assets.map((asset) => (
+                  <tr>
+                    <td class="mono">
+                      <a href={asset.url} rel="noopener">{asset.name}</a>
+                    </td>
+                    <td class="mono">{formatSize(asset.size)}</td>
+                    <td class="sum">{asset.sha256 ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p class="install-note">
+            Every release ships a <code>checksums.txt</code>. Download it next to the
+            archive and run <code>sha256sum -c checksums.txt --ignore-missing</code>.
+            See <a href="/security/#verify">verifying a download</a>.
+          </p>
+        </section>
+      )
+    }
+
+    {
+      tool.history.length > 0 && (
+        <section class="section" id="changelog" style="padding-top:0">
+          <div class="section-head">
+            <h2>Releases</h2>
+          </div>
+          <div class="changelog">
+            {tool.history.map((release) => (
+              <article class="release">
+                <div class="release-head">
+                  <h3>
+                    <a href={release.url} rel="noopener">{release.name}</a>
+                  </h3>
+                  <span class="chip">{formatDate(release.publishedAt)}</span>
+                </div>
+                {release.notes ? (
+                  <pre class="release-notes">{release.notes.trim()}</pre>
+                ) : (
+                  <p class="install-note" style="margin:0">No release notes.</p>
+                )}
+              </article>
+            ))}
+          </div>
+        </section>
+      )
+    }
+  </div>
+
+  <script>
+    // The distro choice is a preference, so it is remembered per browser and
+    // shared across every tool page. Without JavaScript the first pane is
+    // already visible and every command is still on the page.
+    const KEY = "tui-tools:pm";
+    const tabs = [...document.querySelectorAll("[data-install-tab]")];
+    const panes = [...document.querySelectorAll("[data-install-pane]")];
+
+    function select(id, { focus = false } = {}) {
+      const tab = tabs.find((candidate) => candidate.dataset.installTab === id);
+      if (!tab) return false;
+      tabs.forEach((other) => {
+        const active = other === tab;
+        other.setAttribute("aria-selected", String(active));
+        other.tabIndex = active ? 0 : -1;
+      });
+      panes.forEach((pane) => {
+        pane.hidden = pane.dataset.installPane !== id;
+      });
+      if (focus) tab.focus();
+      return true;
+    }
+
+    tabs.forEach((tab, index) => {
+      tab.addEventListener("click", () => {
+        select(tab.dataset.installTab);
+        try {
+          localStorage.setItem(KEY, tab.dataset.installTab);
+        } catch {
+          // A browser with storage disabled just does not remember.
+        }
+      });
+      tab.addEventListener("keydown", (event) => {
+        const step = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+        if (!step) return;
+        event.preventDefault();
+        const next = tabs[(index + step + tabs.length) % tabs.length];
+        select(next.dataset.installTab, { focus: true });
+      });
+    });
+
+    try {
+      const remembered = localStorage.getItem(KEY);
+      if (remembered) select(remembered);
+    } catch {
+      // Ignore: the first pane stays selected.
+    }
+
+    // The screenshot strip swaps the main image rather than opening a lightbox:
+    // one image, one caption, no trapped focus to get out of.
+    const image = document.getElementById("shot-image");
+    const caption = document.getElementById("shot-caption");
+    document.querySelectorAll("[data-shot]").forEach((button) => {
+      button.addEventListener("click", () => {
+        image.src = button.dataset.shot;
+        image.alt = button.dataset.caption;
+        caption.textContent = button.dataset.caption;
+        document
+          .querySelectorAll("[data-shot]")
+          .forEach((other) => other.setAttribute("aria-current", String(other === button)));
+      });
+    });
+  </script>
+</Base>

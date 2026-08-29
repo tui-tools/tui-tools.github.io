@@ -1,0 +1,76 @@
+---
+// The one page shell. `accent` switches the page between the family's green
+// and a tool's blue, which is the same rule the branding uses: green is what
+// every tool shares, blue is what one tool adds.
+import "../styles/global.css";
+import Masthead from "../components/Masthead.astro";
+import Footer from "../components/Footer.astro";
+
+const {
+  title,
+  description,
+  accent = "family",
+  section = "",
+  ogImage = "/brand/icon-256.png",
+} = Astro.props;
+
+const fullTitle = title === "tui-tools" ? title : `${title} · tui-tools`;
+const canonical = new URL(Astro.url.pathname, Astro.site ?? "https://tui-tools.github.io");
+---
+
+<!doctype html>
+<html lang="en" data-accent={accent}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" type="image/svg+xml" href="/brand/icon.svg" />
+    <link rel="apple-touch-icon" href="/brand/icon-256.png" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#1a1b26" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="tui-tools" />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={new URL(ogImage, canonical)} />
+    <meta property="og:url" content={canonical} />
+    <meta name="twitter:card" content="summary" />
+    <style set:html={accent === "tool" ? ":root { --accent: var(--tool); }" : ""} />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <Masthead section={section} />
+    <main id="main">
+      <slot />
+    </main>
+    <Footer />
+
+    <script>
+      // Copying an install command is pressing y on the confirm dialog the
+      // tools themselves show. One delegated listener covers every dialog on
+      // the page, including the ones the install picker swaps in.
+      document.addEventListener("click", async (event) => {
+        const button = event.target.closest("[data-copy]");
+        if (!button) return;
+        const text = button.getAttribute("data-copy");
+        try {
+          await navigator.clipboard.writeText(text);
+        } catch {
+          // A browser that refuses the clipboard should not look like a
+          // success, so say nothing and leave the command selectable.
+          return;
+        }
+        const label = button.querySelector("[data-copy-label]");
+        const previous = label.textContent;
+        button.dataset.copied = "true";
+        label.textContent = "copied";
+        window.setTimeout(() => {
+          button.dataset.copied = "false";
+          label.textContent = previous;
+        }, 1600);
+      });
+    </script>
+  </body>
+</html>

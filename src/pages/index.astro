@@ -1,0 +1,164 @@
+---
+import Base from "../layouts/Base.astro";
+import ToolCard from "../components/ToolCard.astro";
+import CommandDialog from "../components/CommandDialog.astro";
+import catalog from "../data/catalog.json";
+
+const tools = catalog.tools;
+const released = tools.filter((tool) => !tool.unreleased);
+const categories = catalog.categories;
+
+// The hero previews installing the tool that is furthest along, using the
+// channel that works today. Nothing on this page is a mock-up.
+const lead = released[0] ?? tools[0];
+const leadCommand = lead?.install.find((entry) => entry.available && entry.id === "binary");
+
+// The frame beside the hero is the tool doing the same thing the page just
+// did: previewing a command and asking. Every tool renders its confirmation
+// with "before it runs" in the caption, which is what picks it out here.
+const leadShot =
+  lead?.screenshots.find((shot) => /before it runs/i.test(shot.caption)) ??
+  lead?.screenshots[1] ??
+  lead?.screenshots[0];
+---
+
+<Base
+  title="tui-tools"
+  description="Terminal tools for Linux that show you the system as it is, and preview the exact command line of every change before running it. One static binary each, no daemon, no state."
+  section="tools"
+>
+  <div class="page">
+    <section class="hero">
+      <div>
+        <p class="eyebrow">Terminal tools for Linux</p>
+        <h1>
+          The command in the dialog is the command that runs<span
+            class="cursor"
+            aria-hidden="true"></span>
+        </h1>
+        <p class="lede">
+          Every tool here opens read-only, shows you the system as it actually is,
+          and previews the exact command line before it changes anything. One
+          static binary each. No daemon, no state of its own, nothing left
+          running after you quit.
+        </p>
+        <div class="hero-actions">
+          <a class="button button-primary" href="#tools">Browse {tools.length} tools</a>
+          <a class="button" href="/security/">How they behave</a>
+        </div>
+      </div>
+
+      <div class="hero-aside">
+        {
+          leadCommand && (
+            <CommandDialog
+              title={`Install ${lead.name} ${lead.release.tag}`}
+              command={leadCommand.commands[0].command}
+            />
+          )
+        }
+        <ul class="promise">
+          <li><span class="mark">✓</span><span>Preview, then confirm. There is no other path to a change.</span></li>
+          <li><span class="mark">✓</span><span>Read-only by default. Starting a tool only reads.</span></li>
+          <li><span class="mark">✓</span><span>Runs as you. Only an action escalates, through <code>sudo -n</code>.</span></li>
+          <li><span class="mark">✓</span><span><code>--demo</code> on every tool: real previews, nothing touched.</span></li>
+        </ul>
+
+        {
+          leadShot && (
+            <figure class="shots-main" style="margin:0.6rem 0 0">
+              <div class="hero-shot">
+                <img src={leadShot.src} alt={leadShot.caption} width="1040" height="260" />
+              </div>
+              <figcaption class="shots-caption">
+                {lead.name} asking the same question, on a real machine
+              </figcaption>
+            </figure>
+          )
+        }
+      </div>
+    </section>
+
+    <section class="section" id="tools">
+      <div class="section-head">
+        <h2>The tools</h2>
+        <div class="filters" role="group" aria-label="Filter by category">
+          <button type="button" data-filter="all" aria-pressed="true">all</button>
+          {
+            categories.map((category) => (
+              <button type="button" data-filter={category} aria-pressed="false">
+                {category}
+              </button>
+            ))
+          }
+        </div>
+      </div>
+
+      <div class="grid" id="tool-grid">
+        {
+          tools.map((tool) => (
+            <div data-category={tool.category}>
+              <ToolCard tool={tool} />
+            </div>
+          ))
+        }
+      </div>
+      <p class="empty" id="no-match" hidden>No tool in that category yet.</p>
+    </section>
+
+    <section class="section" style="padding-top:0">
+      <div class="section-head"><h2>What makes them a family</h2></div>
+      <div class="grid" style="--min: 18rem">
+        <div class="panel">
+          <h3>One promise</h3>
+          <p>
+            A tool never assembles a shell string. It builds a command value, shows
+            that value in the confirm dialog, and hands the same value to the
+            runner. The preview cannot drift from what executes, because they are
+            the same object.
+          </p>
+        </div>
+        <div class="panel">
+          <h3>One palette</h3>
+          <p>
+            Tokyo Night by default. On <a href="https://omarchy.org" rel="noopener">Omarchy</a>
+            the tools read your active desktop theme, so switching the desktop
+            switches every tool. <code>NO_COLOR</code> drops color and keeps layout.
+          </p>
+        </div>
+        <div class="panel">
+          <h3>One shape</h3>
+          <p>
+            The same key language, the same four bands on screen, the same config
+            precedence, and the same 40-column-to-full-screen responsiveness. They
+            all come from <a href="/kit/">tui-kit</a>.
+          </p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    // Category filter. It is progressive enhancement: without JavaScript the
+    // grid simply shows everything, which is the right default anyway.
+    const buttons = document.querySelectorAll("[data-filter]");
+    const items = document.querySelectorAll("#tool-grid > [data-category]");
+    const empty = document.getElementById("no-match");
+
+    buttons.forEach((button) => {
+      button.addEventListener("click", () => {
+        const wanted = button.dataset.filter;
+        buttons.forEach((other) =>
+          other.setAttribute("aria-pressed", String(other === button)),
+        );
+        let shown = 0;
+        items.forEach((item) => {
+          const match = wanted === "all" || item.dataset.category === wanted;
+          item.hidden = !match;
+          if (match) shown += 1;
+        });
+        empty.hidden = shown > 0;
+      });
+    });
+  </script>
+</Base>

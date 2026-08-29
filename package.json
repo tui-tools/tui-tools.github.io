@@ -1,0 +1,17 @@
+{
+  "name": "tui-tools-site",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The tui-tools family website.",
+  "scripts": {
+    "catalog": "node scripts/build-catalog.mjs",
+    "dev": "npm run catalog && astro dev",
+    "build": "npm run catalog && astro build",
+    "build:only": "astro build",
+    "preview": "astro preview"
+  },
+  "devDependencies": {
+    "astro": "^5.13.0"
+  }
+}

@@ -1,0 +1,79 @@
+# Build the catalog from the organization, render the site, publish to Pages.
+#
+# The site has no content of its own to keep in sync: every tool's card and
+# detail page is built from that tool's tool.json, its latest release and the
+# images the manifest points at. So this runs on a schedule as well as on a
+# push, and a tool's release workflow can wake it immediately by sending a
+# `tool-released` repository dispatch.
+name: publish
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # Hourly, off the hour: a release that does not dispatch still shows up
+    # within the hour.
+    - cron: "17 * * * *"
+  workflow_dispatch:
+  repository_dispatch:
+    types: [tool-released]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time, and never cancel one in flight: a half-published
+# site is worse than a slightly stale one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build the site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: install
+        run: npm ci
+
+      - name: build the catalog
+        env:
+          # Lifts the API rate limit. Read access to public repositories in
+          # this organization is all it is used for.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run catalog
+
+      - name: build the site
+        env:
+          SITE_URL: ${{ vars.SITE_DOMAIN != '' && format('https://{0}', vars.SITE_DOMAIN) || 'https://tui-tools.github.io' }}
+        run: npx astro build
+
+      # The custom domain is opt-in and inert until the owner sets the
+      # SITE_DOMAIN repository variable. See the README: the variable and a DNS
+      # CNAME are the two halves, and setting only one of them breaks the site.
+      - name: write CNAME
+        if: vars.SITE_DOMAIN != ''
+        run: echo "${{ vars.SITE_DOMAIN }}" > dist/CNAME
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    name: deploy to Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

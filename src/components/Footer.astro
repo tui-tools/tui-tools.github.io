@@ -1,0 +1,61 @@
+---
+import catalog from "../data/catalog.json";
+
+const tools = catalog.tools;
+const generated = new Date(catalog.generatedAt);
+const stamp = generated.toISOString().replace("T", " ").slice(0, 16);
+---
+
+<footer class="footer">
+  <div class="page">
+    <div class="footer-grid">
+      <div>
+        <h3>The tools</h3>
+        <ul>
+          {
+            tools.map((tool) => (
+              <li>
+                <a href={`/tools/${tool.name}/`}>{tool.name}</a>
+              </li>
+            ))
+          }
+        </ul>
+      </div>
+      <div>
+        <h3>The family</h3>
+        <ul>
+          <li><a href="/install/">Install</a></li>
+          <li><a href="/security/">Security</a></li>
+          <li><a href="/kit/">tui-kit</a></li>
+        </ul>
+      </div>
+      <div>
+        <h3>Elsewhere</h3>
+        <ul>
+          <li><a href="https://github.com/tui-tools" rel="noopener">github.com/tui-tools</a></li>
+          <li>
+            <a href="https://github.com/tui-tools/tui-template" rel="noopener">
+              Start a new tool
+            </a>
+          </li>
+          <li>
+            <a href="https://github.com/tui-tools/tui-tools.github.io" rel="noopener">
+              This site's source
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <p class="disclaimer">
+      <strong>Unofficial.</strong> These tools follow the
+      <a href="https://omarchy.org" rel="noopener">Omarchy</a> visual style and read
+      its theme files. They are <strong>not</strong> part of the Omarchy project and
+      are not endorsed by its maintainers.
+    </p>
+    <p class="disclaimer" style="border: 0; margin-top: 0.75rem; padding-top: 0;">
+      MIT licensed, per repository. Catalog built from each tool's
+      <code>tool.json</code> at <span>{stamp} UTC</span>.
+    </p>
+  </div>
+</footer>

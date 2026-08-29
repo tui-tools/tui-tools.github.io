@@ -1,0 +1,236 @@
+---
+import Base from "../layouts/Base.astro";
+import CommandDialog from "../components/CommandDialog.astro";
+import catalog from "../data/catalog.json";
+
+const tools = catalog.tools;
+
+const principles = [
+  {
+    title: "Preview, then confirm",
+    body:
+      "No tool changes anything without first showing the exact command line. A tool never assembles a shell string: it builds a command value, the confirm dialog displays that value, and the runner receives the same one. The preview cannot drift from what executes, because they are the same object. That is the whole trust boundary, and it is one small package in tui-kit rather than a rule each tool re-implements.",
+  },
+  {
+    title: "Read-only by default",
+    body:
+      "Starting a tool only reads. Nothing is written, nothing is scheduled, and there is no first-run setup that changes your machine. If a read itself needs root, as ufw's status does, the tool says so instead of silently escalating.",
+  },
+  {
+    title: "Runs as you",
+    body:
+      "Reads work unprivileged wherever the underlying tool allows it. Only an action escalates, through sudo -n, which never prompts: run sudo -v in another terminal first, or start the tool with sudo. The prefix is configurable, so doas works, and an empty prefix runs the command directly when you are already root.",
+  },
+  {
+    title: "No daemon, no state of its own",
+    body:
+      "One static binary. Nothing keeps running after you quit, nothing is installed to run later, and no state is kept beside the system's own. The system is the source of truth; a tool re-reads it after every change, so what you see is what the machine reports rather than what the tool assumed.",
+  },
+  {
+    title: "No network",
+    body:
+      "The tools open no network connection of their own. No telemetry, no update check, no crash reporting, no phone home. Upgrading means downloading a newer binary, on purpose.",
+  },
+  {
+    title: "--demo always works",
+    body:
+      "Every tool runs against in-memory sample data with --demo. Every key works and every command is built and previewed for real; the fake runner records what it was asked to run and answers from a table, so nothing reaches your system. It exists so a reviewer can read the previews before ever pointing a tool at a real machine.",
+  },
+];
+
+const rows = tools.map((tool) => ({
+  name: tool.name,
+  sudo: tool.security.needs_sudo === false ? "never" : "actions only",
+  daemon: tool.security.no_daemon,
+  network: tool.security.no_network,
+  static: tool.security.static_binary,
+  signed: tool.security.signed_releases,
+}));
+
+function mark(value) {
+  return value ? "✓" : "✕";
+}
+---
+
+<Base
+  title="Security"
+  description="How tui-tools behave: preview then confirm, read-only by default, no daemon, no network, static binaries, and how to verify a download."
+  section="security"
+>
+  <div class="page">
+    <section class="hero" style="grid-template-columns:1fr">
+      <div>
+        <p class="eyebrow">Security</p>
+        <h1>What these tools can, and cannot, do to your machine</h1>
+        <p class="lede">
+          These are front ends for programs that change a running system. That is
+          worth being precise about rather than reassuring about. Here is every
+          promise the family makes, what each one is worth, and the one that is
+          still an open item.
+        </p>
+      </div>
+    </section>
+
+    <section class="section" style="padding-top:0">
+      <div class="section-head"><h2>The principles</h2></div>
+      <div class="grid">
+        {
+          principles.map((principle) => (
+            <div class="panel">
+              <h3>{principle.title}</h3>
+              <p style="font-size:0.93rem;color:color-mix(in srgb, var(--fg) 80%, var(--muted));margin-bottom:0">
+                {principle.body}
+              </p>
+            </div>
+          ))
+        }
+      </div>
+    </section>
+
+    <section class="section" style="padding-top:0" id="matrix">
+      <div class="section-head">
+        <h2>Every tool, answered</h2>
+        <span class="chip">from each tool.json</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Tool</th>
+              <th scope="col">Escalates</th>
+              <th scope="col">No daemon</th>
+              <th scope="col">No network</th>
+              <th scope="col">Static</th>
+              <th scope="col">Signed releases</th>
+            </tr>
+          </thead>
+          <tbody>
+            {
+              rows.map((row) => (
+                <tr>
+                  <td class="mono"><a href={`/tools/${row.name}/`}>{row.name}</a></td>
+                  <td class="mono">{row.sudo}</td>
+                  <td class="mono" style="color:var(--family)">{mark(row.daemon)}</td>
+                  <td class="mono" style="color:var(--family)">{mark(row.network)}</td>
+                  <td class="mono" style="color:var(--family)">{mark(row.static)}</td>
+                  <td class="mono" style={row.signed ? "color:var(--family)" : "color:var(--soon)"}>
+                    {mark(row.signed)}
+                  </td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+      </div>
+      <p class="install-note">
+        The last column is the open item. Releases carry SHA-256 checksums and
+        nothing else, which is stated here rather than left for you to discover.
+      </p>
+    </section>
+
+    <section class="section" style="padding-top:0" id="sudo">
+      <div class="section-head"><h2>How sudo is used</h2></div>
+      <div class="split">
+        <div class="prose">
+          <p>
+            A tool resolves the binary it drives — <code>ufw</code>,
+            <code>systemctl</code> — to an absolute path, and prefixes it with the
+            escalation prefix from its configuration. The default is
+            <code>sudo -n</code>: the <code>-n</code> means non-interactive, so it
+            never prompts. If your sudo timestamp has expired, the command fails
+            and the tool tells you, rather than a password box appearing inside a
+            TUI where you cannot tell what is reading it.
+          </p>
+          <p>
+            The whole prefix is one configuration value. Set it to
+            <code>doas</code>, or to the empty string when you are already root:
+          </p>
+        </div>
+        <div class="stack">
+          <CommandDialog title="Warm the sudo timestamp first" command="sudo -v" />
+          <CommandDialog
+            title="Or run the command directly, as root"
+            command="sudo tui-firewall --sudo ''"
+          />
+        </div>
+      </div>
+    </section>
+
+    <section class="section" style="padding-top:0" id="verify">
+      <div class="section-head"><h2>Verifying a download</h2></div>
+      <div class="split">
+        <div class="stack">
+          <CommandDialog
+            title="Check the archive against the release's own checksums.txt"
+            command={`curl -fsSLO https://github.com/tui-tools/tui-firewall/releases/latest/download/checksums.txt
+sha256sum -c checksums.txt --ignore-missing`}
+          />
+          <p style="color:var(--muted);font-size:0.92rem;max-width:60ch">
+            Each tool's page lists the SHA-256 of every asset, parsed from that same
+            file at build time, so you can compare without downloading anything
+            first. <code>--ignore-missing</code> checks only what you have.
+          </p>
+        </div>
+        <div class="panel">
+          <h2>What a checksum proves</h2>
+          <p style="font-size:0.9rem;color:var(--muted)">
+            That the file arrived intact from the same place the checksum did.
+            Both come from the GitHub release, so this catches corruption and a
+            broken mirror, not a compromised release.
+          </p>
+          <p style="font-size:0.9rem;color:var(--muted);margin-bottom:0">
+            Signatures are what would close that gap, and they are not in place
+            yet. Until they are, the strongest check available is building from
+            source: the repositories are small, the dependencies are Bubble Tea,
+            Bubbles, Lip Gloss and the kit, and <code>make build</code> is the
+            whole story.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" style="padding-top:0" id="reporting">
+      <div class="section-head"><h2>Reporting a vulnerability</h2></div>
+      <div class="split">
+        <div class="prose">
+          <p>
+            Report privately, through GitHub's private vulnerability reporting on
+            the affected repository's <strong>Security</strong> tab. Do not open a
+            public issue. Expect a first reply within a week; this is a small
+            project maintained in spare time, and there is no bounty.
+          </p>
+          <p>
+            <strong>In scope</strong> is anything that breaks the trust boundary: a
+            command that executes without having been previewed and confirmed; a
+            preview that does not match what is executed; an argument taken from a
+            config file, a theme file or parsed command output that reaches a shell
+            or changes the meaning of a command line; escalation beyond the
+            configured prefix.
+          </p>
+          <p style="margin-bottom:0">
+            <strong>Not in scope</strong> is anything you can already do with the
+            underlying tool at the same privilege level. These are terminal front
+            ends, not a privilege boundary of their own. Needing root to change the
+            system is the design, and locking yourself out of a machine with a rule
+            that does so is something the tools warn about but do not
+            second-guess.
+          </p>
+        </div>
+        <div class="panel">
+          <h2>Per-repository policy</h2>
+          <ul style="list-style:none;padding:0;margin:0;display:grid;gap:0.4rem">
+            {
+              tools.map((tool) => (
+                <li class="mono" style="font-size:0.85rem">
+                  <a href={`${tool.repo}/security/policy`} rel="noopener">
+                    {tool.name}
+                  </a>
+                </li>
+              ))
+            }
+          </ul>
+        </div>
+      </div>
+    </section>
+  </div>
+</Base>

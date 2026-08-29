@@ -1,0 +1,65 @@
+---
+const { tool } = Astro.props;
+
+const shot = tool.screenshots[0];
+const version = tool.release?.tag ?? null;
+const platforms = tool.platforms.map((p) => p.split("/")[1]).join(", ");
+const rest = tool.name.replace(/^tui-/, "");
+
+/**
+ * A download URL is long in the middle and meaningful at both ends, so the
+ * card elides the middle: the reader still sees `curl -fsSL` and the archive
+ * name. Truncating the end would leave nothing but the host.
+ */
+function elide(command, limit = 44) {
+  if (command.length <= limit) return command;
+  const head = Math.ceil((limit - 1) * 0.42);
+  const tail = limit - 1 - head;
+  return `${command.slice(0, head)}…${command.slice(-tail)}`;
+}
+
+const headline = tool.headline ? elide(tool.headline.command) : null;
+---
+
+<article class="card">
+  <div class="card-head">
+    {tool.icon && <img src={tool.icon} alt="" width="34" height="34" loading="lazy" />}
+    <div>
+      <h3 class="card-name">
+        <a href={`/tools/${tool.name}/`}><span class="prefix">tui-</span>{rest}</a>
+      </h3>
+    </div>
+    <span style="margin-left:auto">
+      {
+        version ? (
+          <span class="chip chip-version">{version}</span>
+        ) : (
+          <span class="chip chip-unreleased">unreleased</span>
+        )
+      }
+    </span>
+  </div>
+
+  {
+    shot && (
+      <div class="card-shot">
+        <img src={shot.src} alt={shot.caption} loading="lazy" width="1040" height="260" />
+      </div>
+    )
+  }
+
+  <div class="card-body">
+    <p class="card-tagline">{tool.tagline}</p>
+    <div class="card-meta">
+      <span class="chip chip-category">{tool.category}</span>
+      <span class="chip">linux · {platforms}</span>
+    </div>
+    {
+      headline && (
+        <p class="card-install" title={tool.headline.command}>
+          <span class="sigil">$</span> {headline}
+        </p>
+      )
+    }
+  </div>
+</article>

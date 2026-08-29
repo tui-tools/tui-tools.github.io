@@ -1,0 +1,29 @@
+---
+const { section = "" } = Astro.props;
+
+const links = [
+  { id: "tools", href: "/", label: "Tools" },
+  { id: "install", href: "/install/", label: "Install" },
+  { id: "security", href: "/security/", label: "Security" },
+  { id: "kit", href: "/kit/", label: "Kit" },
+];
+---
+
+<header class="masthead">
+  <div class="page masthead-inner">
+    <a class="brand" href="/">
+      <img src="/brand/icon.svg" alt="" width="26" height="26" />
+      <span><span class="prefix">tui-</span>tools</span>
+    </a>
+    <nav class="nav" aria-label="Main">
+      {
+        links.map((link) => (
+          <a href={link.href} aria-current={section === link.id ? "page" : undefined}>
+            {link.label}
+          </a>
+        ))
+      }
+      <a href="https://github.com/tui-tools" rel="noopener">GitHub</a>
+    </nav>
+  </div>
+</header>

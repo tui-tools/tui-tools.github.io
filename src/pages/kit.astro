@@ -1,0 +1,152 @@
+---
+import Base from "../layouts/Base.astro";
+import CommandDialog from "../components/CommandDialog.astro";
+
+const packages = [
+  ["theme", "The Tokyo Night palette, Omarchy theme detection, NO_COLOR, and a ready-made set of Lip Gloss styles"],
+  ["ui", "Header, table, help bar, help screen, status line, and the confirm / input / picker dialogs"],
+  ["config", "/etc/<tool>/config.toml + ~/.config/<tool>/config.toml + environment, in that order"],
+  ["runner", "Preview → confirm → run, including privilege escalation, timeouts and a fake for --demo and tests"],
+];
+---
+
+<Base
+  title="tui-kit"
+  description="tui-kit is the shared foundation of the tui-tools family: the palette, the widgets, the configuration loader and the command runner that make every tool look and behave the same."
+  section="kit"
+>
+  <div class="page">
+    <section class="hero">
+      <div>
+        <p class="eyebrow">The shared foundation</p>
+        <h1><span style="color:var(--family)">tui-</span>kit</h1>
+        <p class="lede">
+          The palette, the widgets, the configuration loader and the command runner
+          that make every tool in the family look and behave the same. It is a
+          library, not a tool, which is why it has no card in the marketplace.
+        </p>
+        <div class="hero-actions">
+          <a class="button button-primary" href="https://github.com/tui-tools/tui-kit" rel="noopener">
+            Read the source
+          </a>
+          <a
+            class="button"
+            href="https://github.com/tui-tools/tui-template"
+            rel="noopener">Start a tool from the template</a
+          >
+        </div>
+      </div>
+      <div class="hero-aside">
+        <CommandDialog
+          title="Add it to a Go module"
+          command="go get github.com/tui-tools/tui-kit@v0.1.2"
+        />
+        <p style="color:var(--muted);font-size:0.9rem;margin:0">
+          Dependencies are deliberately small: Bubble Tea, Bubbles and Lip Gloss,
+          nothing else. Configuration and palette files are read by a forty-line
+          parser rather than a TOML library.
+        </p>
+      </div>
+    </section>
+
+    <section class="section" style="padding-top:0">
+      <div class="section-head"><h2>What is in it</h2></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Package</th>
+              <th scope="col">What it gives you</th>
+            </tr>
+          </thead>
+          <tbody>
+            {
+              packages.map(([name, what]) => (
+                <tr>
+                  <td class="mono" style="color:var(--tool)">{name}</td>
+                  <td>{what}</td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section" style="padding-top:0">
+      <div class="section-head"><h2>Where the promise lives</h2></div>
+      <div class="split">
+        <div class="prose">
+          <p>
+            The family's one promise — the command in the dialog is the command
+            that runs — is kept in <code>runner</code>, and only there. A tool
+            builds a <code>runner.Command</code>: an argv plus a description. It
+            shows it with <code>ui.Confirm</code>. On yes, it hands
+            <strong>that same value</strong> back to the runner.
+          </p>
+          <p>
+            Because <code>Preview</code> and <code>Run</code> consume one value,
+            the text in the dialog is guaranteed to be what executes. No tool in
+            the family assembles a shell string, and none of them needs to be
+            trusted to get this right individually.
+          </p>
+          <p style="margin-bottom:0">
+            <code>runner.Fake</code> is the other half. It records what it was
+            asked to run and answers from a canned table, which is what makes
+            <code>--demo</code> honest and what tests assert against: press a key,
+            then check that the fake holds exactly one command with exactly the
+            argv the preview showed.
+          </p>
+        </div>
+        <div class="panel">
+          <h2>Also in the repository</h2>
+          <ul style="margin:0;padding-left:1.1rem;display:grid;gap:0.6rem;font-size:0.9rem;color:var(--muted)">
+            <li>
+              <code>schema/tool.schema.json</code> — the manifest this website is
+              built from, and
+              <a href="https://github.com/tui-tools/tui-kit/blob/main/docs/tool-manifest.md" rel="noopener">
+                its documentation</a
+              >.
+            </li>
+            <li>
+              <code>tools/render-install.py</code> — renders a tool README's Install
+              section from that manifest, so the README and this site cannot
+              disagree.
+            </li>
+            <li>
+              <code>tools/render-screenshots.py</code> — renders a tool's README
+              frames from the real binary in <code>--demo</code>, under a
+              pseudo-terminal. Every screenshot on this site came out of it.
+            </li>
+            <li>
+              <code>templates/</code> — the CI workflow and the GoReleaser
+              configuration a new tool starts from.
+            </li>
+            <li>
+              <code>assets/branding/</code> — the family mark, per-tool icons and
+              the lockups, all generated.
+            </li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" style="padding-top:0">
+      <div class="section-head"><h2>Adding a tool to the family</h2></div>
+      <div class="prose" style="max-width:70ch">
+        <p>
+          Press <strong>Use this template</strong> on
+          <a href="https://github.com/tui-tools/tui-template" rel="noopener">tui-template</a>,
+          which is a working tool rather than a pile of TODOs. Rename it, replace
+          one package with your subject, fill in <code>tool.json</code>, re-render
+          the screenshots, and tag <code>v0.1.0</code>.
+        </p>
+        <p style="margin-bottom:0">
+          This site picks the tool up on its next build — hourly, or immediately
+          when the release workflow tells it a release shipped. Nothing here is
+          edited by hand to add a tool.
+        </p>
+      </div>
+    </section>
+  </div>
+</Base>
