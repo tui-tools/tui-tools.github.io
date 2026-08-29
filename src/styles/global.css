@@ -1074,7 +1074,9 @@ td .keycap {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: center;
+  /* The dialog sits left of centre in the rendered frame, so bias the crop
+     that way rather than trimming it against the terminal's empty right. */
+  object-position: 35% center;
 }
 
 /* Grid and flex children default to min-width:auto, so one wide screenshot or
