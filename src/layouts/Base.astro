@@ -4,6 +4,7 @@
 // every tool shares, blue is what one tool adds.
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
+import { join } from "node:path";
 import "../styles/global.css";
 import Masthead from "../components/Masthead.astro";
 import Footer from "../components/Footer.astro";
@@ -31,7 +32,10 @@ const canonical = new URL(Astro.url.pathname, Astro.site ?? "https://tui-tools.g
 // no version, which is also what the fallback to the family card does.
 const ogImage = new URL(`/og/${ogSlug}.png`, canonical);
 try {
-  const bytes = readFileSync(new URL(`../../public/og/${ogSlug}.png`, import.meta.url));
+  // Resolved from the project root, not from this file: at build time Astro
+  // runs the compiled layout from a temporary location, so a path relative
+  // to import.meta.url would point nowhere and silently drop the version.
+  const bytes = readFileSync(join(process.cwd(), "public", "og", `${ogSlug}.png`));
   ogImage.searchParams.set("v", createHash("sha256").update(bytes).digest("hex").slice(0, 10));
 } catch {
   // No card on disk: leave the URL unversioned.
