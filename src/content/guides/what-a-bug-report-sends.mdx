@@ -1,0 +1,212 @@
+---
+title: What a bug report sends, and what it never does
+description: The --report flag prints the block a maintainer needs to reproduce a bug, and leaves out your hostname, your user name and your home path by construction, not by asking you to trust it.
+date: 2026-08-30
+tools:
+  - tui-secure
+  - tui-users
+draft: false
+---
+
+import CommandDialog from "../../components/CommandDialog.astro";
+import OutputBlock from "../../components/OutputBlock.astro";
+
+Every block on this page came off a Fedora workstation before the page was
+written, from [tui-secure](/tools/tui-secure/) and
+[tui-users](/tools/tui-users/) built against
+[tui-kit v0.2.9](https://github.com/tui-tools/tui-kit/releases/tag/v0.2.9). The
+command is the same for any tool in the family. Replace the name and nothing
+else changes.
+
+## The problem a report has to solve
+
+A bug in one of these tools is almost always a bug about a machine you are not
+looking at. A parser met a version of `ufw` nobody tested, a date read wrong
+under a locale nobody ran, a layout broke in a terminal nobody has. To even
+begin, a maintainer needs the machine's real shape: the distribution and its
+version, the kernel, the architecture, the backend and the version the tool
+read off it, whether the binary came from a package or a hand build, the
+terminal, the theme, the locale.
+
+None of that is secret, but people paste it by hand and paste it badly. Half
+the fields are missing, the version is the tool's and not the backend's, the
+distribution is "latest". So the report turns into three rounds of "which
+version, on what?". And the other failure is worse: a reporter pastes too much.
+A full `env` dump, a screenshot with the shell prompt in it, a home path with
+their name in it, an address. Now a public issue carries something the reporter
+never meant to publish.
+
+## One command, one block
+
+Every tool answers `--report`. It prints a plain block, one `key: value` per
+line, in a fixed order, and exits. No UI, no privileges, nothing read off the
+system that a report does not need. Here is the real output on this machine:
+
+<CommandDialog
+  title="The block a bug report needs"
+  command="tui-secure --report"
+  tool="tui-secure"
+/>
+
+<OutputBlock
+  title="tui-secure --report, verbatim"
+  body={String.raw`
+tui-secure 0.1.2 (kit v0.2.9)
+backend: host (version unknown: the machine itself, so there is no one version to read)
+mode: live
+distro: fedora 42 (Fedora Linux 42 (Workstation Edition))
+kernel: 6.19.14-108.fc42.x86_64
+arch: x86_64
+locale: en_US.UTF-8
+term: xterm-256color
+theme: tokyo-night
+sudo: sudo -n
+root: no
+binary: /tmp/tui-report-demo/tui-secure (not from a package)
+backends: systemd 257, openssh 9.9, ufw absent, firewalld 2.3.2, sbctl absent
+`}
+/>
+
+Read it top to bottom and it answers the questions a maintainer would otherwise
+have to ask one at a time. The first line is what ran and what it was built
+against. `mode: live` says the numbers came off the real machine and not from
+`--demo` sample data. The `backends` line is `tui-secure`'s own half of the
+block: the version of every program it probes, with `absent` for the ones this
+machine does not have, so a wrong posture can be told from a missing program.
+`binary` says where the running file lives and whether a package manager put it
+there, because a bug in a hand build from an unknown commit is a different
+conversation from a bug in the published package.
+
+The tool-specific half differs by tool but the shape does not. `tui-users`
+drives shadow-utils and carries a different backend and its own extra line:
+
+<OutputBlock
+  title="tui-users --report, verbatim"
+  body={String.raw`
+tui-users 0.1.2 (kit v0.2.9)
+backend: shadow-utils (version unknown: no shadow-utils program prints one)
+mode: live
+distro: fedora 42 (Fedora Linux 42 (Workstation Edition))
+kernel: 6.19.14-108.fc42.x86_64
+arch: x86_64
+locale: en_US.UTF-8
+term: xterm-256color
+theme: tokyo-night
+sudo: sudo -n
+root: no
+binary: /tmp/tui-report-demo/tui-users (not from a package)
+openssh: 9.9
+`}
+/>
+
+## What it never sends, and why that is not a promise
+
+The interesting part is what is not in the block. There is no hostname, no user
+name, no home directory, no network address, and nothing out of the environment
+except four variables the parsers actually run under: `LANG`, `LC_ALL`, `TERM`
+and `TERM_PROGRAM`. That is not a rule the code tries to follow. It is a rule
+the code cannot break, because the block is built from a fixed list of fields
+and there is no field that carries any of those things. The tool hands the kit
+what only it knows, the kit collects the distribution from `/etc/os-release`,
+the kernel from the `uname` syscall and the rest from its own process, and
+`--report` starts no process to go looking for more. The
+[report package](https://github.com/tui-tools/tui-kit/tree/main/report) is where
+that collection lives.
+
+The one field that could name you is the binary's own path, because a path
+under your home directory has your user name in it. So that path is the one the
+code scrubs. A binary anywhere under `/home` or `/root` is not printed. It is
+replaced by a placeholder that is meant to look like one, so you can see that
+something was left out rather than guess the tool failed to find itself. Here is
+the same command, run from a copy of the binary placed under a home directory:
+
+<OutputBlock
+  title="tui-secure --report, run from a binary under $HOME"
+  body={String.raw`
+tui-secure 0.1.2 (kit v0.2.9)
+backend: host (version unknown: the machine itself, so there is no one version to read)
+mode: live
+distro: fedora 42 (Fedora Linux 42 (Workstation Edition))
+kernel: 6.19.14-108.fc42.x86_64
+arch: x86_64
+locale: en_US.UTF-8
+term: xterm-256color
+theme: tokyo-night
+sudo: sudo -n
+root: no
+binary: ~elsewhere~ (not from a package)
+backends: systemd 257, openssh 9.9, ufw absent, firewalld 2.3.2, sbctl absent
+`}
+/>
+
+Every other line is identical. The `binary` line, which read
+`/tmp/tui-report-demo/tui-secure` a moment ago, now reads `~elsewhere~`. The
+real path was `/home/<the user>/.local/...`, and none of it reached the block.
+A path outside the home directories, like the one in the first block, is kept,
+because it answers a real question and names nobody. The rule that draws that
+line is small: outside `/home` and `/root` the path is printed, and everywhere
+else it is a placeholder.
+
+The tool's own extra lines go through the same flattening. Whatever a tool hands
+in for its half of the block is collapsed to a single line with control
+characters dropped, so a tool cannot smuggle extra keys, or a newline, into a
+block that is supposed to be safe to publish.
+
+### It is covered by tests, so it stays true
+
+A privacy property that holds today and breaks in the next release is not worth
+much, so the boundary is pinned by tests that fail the build if it moves.
+
+In the kit's report package, `TestRenderNeverLeaksTheEnvironment` sets
+`HOSTNAME`, `USER`, `HOME`, an AWS secret and an `SSH_CONNECTION` in the
+environment, renders a block, and fails if any of `alice`, `workstation`, the
+secret, the address or the string `/home/` appears in the output.
+`TestScrubPath` checks the path rule directly, case by case: a packaged path is
+printed, a path under `/home` or `/root` is redacted, a relative path says
+nothing. `TestPackagedPath` fixes which locations count as a package install so
+the origin note cannot drift.
+
+Each tool carries the same guarantee for its own half. In `tui-secure`'s
+`report_test.go`, `TestRunReportLive` sets `HOSTNAME=workstation`,
+`USER=alice`, `HOME=/home/alice`, runs the real `--report` code path, checks the
+block has the fields a report needs, and then fails if `alice`, `workstation` or
+`/home/` shows up anywhere in it. The tool's extra lines are inside that
+assertion, so a new extra field that leaked a home path would turn the test red.
+
+## Where it plugs in
+
+The reason for a fixed shape is the other end of the trip. Every tool's bug form
+asks for this block as its first and required field, rendered as shell:
+
+```yaml
+  - type: textarea
+    id: report
+    attributes:
+      label: Output of `tui-secure --report`
+      description: |
+        Run `tui-secure --report` and paste the output verbatim, without editing
+        it. It names the versions, the backend, the distribution, the kernel
+        and the terminal, and it deliberately carries no hostname, user name,
+        home path or address, so it is safe to publish as it is.
+      render: shell
+    validations:
+      required: true
+```
+
+So a reporter runs one command and pastes one block, instead of hunting for
+versions and half-remembering which ones matter. The full form is
+[bug_report.yml](https://github.com/tui-tools/tui-secure/blob/main/.github/ISSUE_TEMPLATE/bug_report.yml),
+and the same form is rendered into every tool from one template, so an issue on
+any repository reads the same way. Where the process around it lives is written
+down too: [CONTRIBUTING](https://github.com/tui-tools/tui-secure/blob/main/CONTRIBUTING.md)
+says a bug report from a real machine is the most useful thing you can send, and
+[SECURITY](https://github.com/tui-tools/tui-secure/blob/main/SECURITY.md) is the
+private channel for the reports that should not be a public issue at all.
+
+## The same idea as the rest of the family
+
+At run time these tools show you the exact command before they run it and wait
+for a yes. `--report` is the same principle pointed at disclosure. It shows you
+the exact block before you paste it, and the block is everything it will
+disclose. There is no second, fuller report, and nothing collected that the
+lines do not show. What you read is what you send.
