@@ -171,6 +171,31 @@ Both are generated at build time and neither is committed:
 - **`robots.txt`** is the endpoint `src/pages/robots.txt.js`, which points at
   the sitemap on whatever host `site` names.
 
+### The machine-readable catalog
+
+`https://tui.tools/catalog.json` is the same family catalog the pages are built
+from, cut down to what a program wants: one entry per tool with its package
+name, the current version and release date, the backends it drives and the
+versions the lab has run them against, and links to the repository, the tool's
+page, its release notes and its opening screenshot. Plus the family's three
+repository lines and the URL of the key that signs them. It is the endpoint
+`src/pages/catalog.json.js`, a projection of `src/data/catalog.json` with every
+URL absolute against `site`, so a preview host describes itself and never
+production.
+
+It exists for the forthcoming `tui-tools` launcher, and for anything else that
+wants the list without scraping HTML. `schema` is the contract: it is bumped
+only when a field changes meaning, and new fields are added without bumping it.
+The document is rebuilt on the same hourly schedule as the rest of the site,
+and served with a ten-minute cache and `Access-Control-Allow-Origin: *`.
+
+**It informs; it is never a source of trust.** A version in it is what the last
+build saw on the GitHub API — a claim, not a signature. Installing goes through
+the signed repository, where the package manager verifies the repository index
+and the package itself, and that verification is the only thing that decides
+what reaches a machine. A reader of this document is choosing what to ask
+`apt`, `dnf` or `pacman` for; it is not deciding what to trust.
+
 ## Hosting
 
 The site runs on GitHub Pages today. It is also packaged as a container, so it
@@ -426,6 +451,7 @@ already on disk.
 | `src/pages/security.astro` | The family's principles, every tool's answers, and how to report |
 | `src/pages/kit.astro` | What `tui-kit` is |
 | `src/pages/robots.txt.js` | `robots.txt`, built from `site` so no host is hardcoded |
+| `src/pages/catalog.json.js` | `/catalog.json`, the machine-readable catalog described above |
 | `src/components/CommandDialog.astro` | The site's one borrowed idea, below |
 | `src/lib/markdown.js` | The safe markdown subset a manifest's `description` may use |
 | `src/styles/global.css` | Tokyo Night, and the type rule: the machine speaks in mono, we speak in sans |
