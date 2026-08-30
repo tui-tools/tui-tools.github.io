@@ -6,73 +6,81 @@ import catalog from "../data/catalog.json";
 const tools = catalog.tools.filter((tool) => !tool.unreleased);
 const anyName = tools[0]?.name ?? "tui-firewall";
 
-// One entry per package manager: what you do once per machine, and what you
-// then type for any tool in the family. None of the repositories exist yet, so
-// every setup block is honest about being the plan rather than the state.
+// Whether the package repository actually answers is decided once, at build
+// time, by scripts/build-catalog.mjs: it sends a HEAD to pkgs.tui.tools and
+// records the answer in the catalog. This page reads that rather than
+// guessing, so it says "coming soon" until the day the repository is really
+// there and then stops saying it without anyone editing a file.
+const pkgs = catalog.pkgs ?? { url: "https://pkgs.tui.tools", live: false };
+const live = pkgs.live === true;
+
+// The per-manager setup is generated from the same table that writes it into
+// every tool's README, and reaches this page through the catalog. Taking it
+// from a tool rather than restating it here is what keeps the site and the
+// repositories from disagreeing.
+const channels = (id) =>
+  tools.map((tool) => tool.install.find((entry) => entry.id === id)).filter(Boolean);
+const setupFor = (id) => channels(id).find((entry) => entry.setup)?.setup ?? null;
+// A channel is offered as working when at least one released tool can actually
+// be installed through it. One tool is enough: the repository is the family's,
+// not the tool's, and the setup is the same either way.
+const readyFor = (id) => channels(id).some((entry) => entry.available === true);
+
 const managers = [
   {
     id: "pacman",
     label: "Arch Linux",
     manager: "pacman",
-    setupTitle: "Add the tui-tools repository to /etc/pacman.conf",
-    setup: `sudo pacman-key --recv-keys $TUI_TOOLS_KEY_ID
-sudo pacman-key --lsign-key $TUI_TOOLS_KEY_ID
-printf '[tui-tools]\\nServer = https://pkgs.tui.tools/arch/$arch\\n' \\
-  | sudo tee -a /etc/pacman.conf
-sudo pacman -Sy`,
-    installTitle: "Then install any tool",
     install: `sudo pacman -S ${anyName}`,
+    setup: setupFor("pacman"),
+    ready: readyFor("pacman"),
   },
   {
     id: "aur",
     label: "Arch Linux (AUR)",
     manager: "an AUR helper",
-    setupTitle: "No repository to add",
-    setup: `# The AUR needs no setup beyond a helper such as paru or yay.`,
-    installTitle: "Build the released binary from the AUR",
     install: `paru -S ${anyName}-bin`,
+    // The AUR needs no repository: a helper builds from a PKGBUILD. Nobody has
+    // published one for this family yet.
+    setup: null,
+    ready: false,
+    note: "The AUR needs no setup beyond a helper such as paru or yay. No PKGBUILD is published yet; the signed repository above is the supported route on Arch.",
   },
   {
     id: "apt",
     label: "Debian / Ubuntu",
     manager: "apt",
-    setupTitle: "Add the keyring and the repository",
-    setup: `curl -fsSL https://pkgs.tui.tools/deb/tui-tools.gpg \\
-  | sudo tee /usr/share/keyrings/tui-tools.gpg > /dev/null
-echo "deb [signed-by=/usr/share/keyrings/tui-tools.gpg] https://pkgs.tui.tools/deb stable main" \\
-  | sudo tee /etc/apt/sources.list.d/tui-tools.list
-sudo apt update`,
-    installTitle: "Then install any tool",
     install: `sudo apt install ${anyName}`,
+    setup: setupFor("apt"),
+    ready: readyFor("apt"),
   },
   {
     id: "dnf",
     label: "Fedora / RHEL",
     manager: "dnf",
-    setupTitle: "Add the .repo file",
-    setup: `sudo curl -fsSL -o /etc/yum.repos.d/tui-tools.repo \\
-  https://pkgs.tui.tools/rpm/tui-tools.repo
-sudo rpm --import https://pkgs.tui.tools/rpm/tui-tools.gpg`,
-    installTitle: "Then install any tool",
     install: `sudo dnf install ${anyName}`,
+    setup: setupFor("dnf"),
+    ready: readyFor("dnf"),
   },
   {
     id: "zypper",
     label: "openSUSE",
     manager: "zypper",
-    setupTitle: "Add the repository",
-    setup: `sudo zypper addrepo --refresh https://pkgs.tui.tools/rpm tui-tools
-sudo rpm --import https://pkgs.tui.tools/rpm/tui-tools.gpg
-sudo zypper refresh`,
-    installTitle: "Then install any tool",
     install: `sudo zypper install ${anyName}`,
+    // The rpm repository would probably serve zypper unchanged, but nothing
+    // has verified that, so it stays coming soon rather than being asserted.
+    setup: null,
+    ready: false,
+    note: "The rpm repository is the same one dnf uses, and it would very likely serve zypper unchanged. Nothing has verified that, so it is not claimed here.",
   },
 ];
+
+const anyReady = managers.some((manager) => manager.ready);
 ---
 
 <Base
   title="Install"
-  description="How to install tui-tools: the one-time repository setup for pacman, apt, dnf and zypper, the static binaries that work today, and how to verify a download."
+  description="How to install tui-tools: one command adds the package repository, then apt, dnf or pacman installs any tool in the family. Static binaries and checksums too."
   section="install"
 >
   <div class="page">
@@ -81,18 +89,68 @@ sudo zypper refresh`,
         <p class="eyebrow">Install</p>
         <h1>Set the repository up once, then install any tool</h1>
         <p class="lede">
-          The family is heading for real distribution packages, so a tool is
-          installed the way everything else on your machine is:
-          <code>pacman -S</code>, <code>apt install</code>, <code>dnf install</code>.
-          The repository behind them is not live yet. What works today is the
-          static binary, and it is one command.
+          {
+            anyReady ? (
+              <>
+                A tool from this family is installed the way everything else on
+                your machine is: <code>pacman -S</code>,
+                <code>apt install</code>, <code>dnf install</code>. One command
+                adds the repository, and after that upgrades arrive with the
+                rest of your system updates.
+              </>
+            ) : (
+              <>
+                The family is heading for real distribution packages, so a tool
+                is installed the way everything else on your machine is:
+                <code>pacman -S</code>, <code>apt install</code>,
+                <code>dnf install</code>. The releases already carry the
+                packages; the repository serving them is not live yet. What
+                works today is the static binary, and it is one command.
+              </>
+            )
+          }
         </p>
       </div>
     </section>
 
+    {
+      anyReady && (
+        <section class="section" style="padding-top:0" id="script">
+          <div class="section-head">
+            <h2>One command, whichever distribution</h2>
+            <span class="chip chip-version">works now</span>
+          </div>
+          <div class="split">
+            <div>
+              <CommandDialog
+                title="Detect the package manager and add the repository"
+                command={`curl -fsSL ${pkgs.url}/install.sh | sh`}
+                manager="install-script"
+              />
+            </div>
+            <div class="panel">
+              <h2>Read it first</h2>
+              <p style="font-size:0.9rem;color:var(--muted)">
+                A family whose whole promise is <em>preview before you run</em>
+                does not ask you to pipe a script into a shell without looking
+                at it. The script prints every privileged command before running
+                it, and <code>--dry-run</code> prints them without running
+                anything.
+              </p>
+              <p style="font-size:0.9rem;color:var(--muted);margin-bottom:0">
+                <code>curl -fsSL {pkgs.url}/install.sh -o install.sh</code> and
+                read it, or take the commands by hand from the section below —
+                they are the same ones.
+              </p>
+            </div>
+          </div>
+        </section>
+      )
+    }
+
     <section class="section" style="padding-top:0" id="today">
       <div class="section-head">
-        <h2>Today: the static binary</h2>
+        <h2>{anyReady ? "Or the static binary" : "Today: the static binary"}</h2>
         <span class="chip chip-version">works now</span>
       </div>
       <div class="split">
@@ -129,70 +187,86 @@ sudo zypper refresh`,
 
     <section class="section" style="padding-top:0" id="repositories">
       <div class="section-head">
-        <h2>Coming: one repository, every tool</h2>
-        <span class="chip chip-unreleased">not live yet</span>
+        <h2>{anyReady ? "The setup, by hand" : "Coming: one repository, every tool"}</h2>
+        {
+          anyReady ? (
+            <span class="chip chip-version">works now</span>
+          ) : (
+            <span class="chip chip-unreleased">not live yet</span>
+          )
+        }
       </div>
       <p class="lede" style="max-width:62ch">
-        These are the commands the family is building towards. They are written
-        down now so the shape is public and reviewable; nothing at
-        <code>pkgs.tui.tools</code> answers yet, so running them today will fail.
+        {
+          anyReady ? (
+            <>
+              What the one-liner does, spelled out. Three or four commands per
+              distribution: import the signing key, point the package manager at
+              the repository, refresh.
+            </>
+          ) : (
+            <>
+              These are the commands the family is building towards. They are
+              written down now so the shape is public and reviewable; nothing at
+              <code>{pkgs.url.replace("https://", "")}</code> answers yet, so
+              running them today will fail.
+            </>
+          )
+        }
       </p>
 
       <div class="stack" style="margin-top:2rem">
         {
           managers.map((manager) => (
             <section class="panel" id={manager.id}>
-              <h2>{manager.label}</h2>
+              <h2>
+                {manager.label}
+                {!manager.ready && (
+                  <span class="chip chip-unreleased" style="margin-left:0.6rem">
+                    coming soon
+                  </span>
+                )}
+              </h2>
               <div class="stack" style="margin-top:0">
-                <CommandDialog
-                  title={manager.setupTitle}
-                  command={manager.setup}
-                  manager={manager.id}
-                  soon
-                />
-                <CommandDialog
-                  title={manager.installTitle}
-                  command={manager.install}
-                  tool={anyName}
-                  manager={manager.id}
-                  soon
-                />
+                {manager.setup ? (
+                  <>
+                    <CommandDialog
+                      title="Add the repository and its signing key"
+                      command={manager.setup.manual}
+                      manager={manager.id}
+                      soon={!manager.ready}
+                    />
+                    <CommandDialog
+                      title="Then install any tool"
+                      command={manager.install}
+                      tool={anyName}
+                      manager={manager.id}
+                      soon={!manager.ready}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <CommandDialog
+                      title="Then install any tool"
+                      command={manager.install}
+                      tool={anyName}
+                      manager={manager.id}
+                      soon
+                    />
+                    <p class="install-note">{manager.note}</p>
+                  </>
+                )}
               </div>
-              <p class="install-note">
-                One setup per machine. After it, every tool in the family is a
-                <code>{manager.manager}</code> away, and upgrades come with the rest
-                of your system updates.
-              </p>
+              {manager.setup && (
+                <p class="install-note">
+                  One setup per machine. After it, every tool in the family is a
+                  <code>{manager.manager}</code> away, and upgrades come with the
+                  rest of your system updates.
+                </p>
+              )}
             </section>
           ))
         }
-      </div>
-    </section>
-
-    <section class="section" style="padding-top:0" id="script">
-      <div class="section-head">
-        <h2>The one-liner</h2>
-        <span class="chip chip-unreleased">planned</span>
-      </div>
-      <div class="split">
-        <div>
-          <CommandDialog
-            title="Detect the package manager and add the repository"
-            command="curl -fsSL https://pkgs.tui.tools/install.sh | sh"
-            manager="install-script"
-            soon
-          />
-        </div>
-        <div class="panel">
-          <h2>Read it first</h2>
-          <p style="font-size:0.9rem;color:var(--muted);margin-bottom:0">
-            A family whose whole promise is <em>preview before you run</em> is not
-            going to ask you to pipe a script into a shell without looking at it.
-            When this exists, the page it lives on will show the script in full,
-            and <code>curl -fsSL … -o install.sh</code> then reading it will be the
-            recommended path.
-          </p>
-        </div>
       </div>
     </section>
 
@@ -216,12 +290,20 @@ sha256sum -c checksums.txt --ignore-missing`}
         </div>
         <div class="panel">
           <h2>Signatures</h2>
+          <p style="font-size:0.9rem;color:var(--muted)">
+            The tarballs on a GitHub release are <strong>not signed</strong>;
+            <code>checksums.txt</code> tells you one arrived intact, which is not
+            the same as proving who built it.
+          </p>
           <p style="font-size:0.9rem;color:var(--muted);margin-bottom:0">
-            Releases are <strong>not signed yet</strong>. The checksums file tells
-            you an archive arrived intact; it does not, on its own, prove who built
-            it. Signed releases and a signed package repository are the same piece
-            of work, and it is the open item on the
-            <a href="/security/">security page</a>.
+            The <strong>packages are</strong>. Every <code>.deb</code>,
+            <code>.rpm</code> and <code>.pkg.tar.zst</code> in the repository is
+            signed by one key, and so is each repository's index — the apt
+            <code>Release</code>, the dnf <code>repomd.xml</code>, the pacman
+            database. Your package manager checks all of it before installing,
+            which is the real reason to prefer this route over a tarball. The key
+            is at <code>{pkgs.url}/pubkey.asc</code>, and the
+            <a href="/security/">security page</a> has the rest.
           </p>
         </div>
       </div>

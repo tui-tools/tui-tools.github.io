@@ -943,6 +943,32 @@ hr {
   margin: 0;
 }
 
+/* The one-time repository setup, spelled out. Collapsed by default: most
+   readers want the one command above it, and the ones who want to see every
+   line get them without a second page. */
+.manual-setup > summary {
+  font-size: 0.88rem;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0.35rem 0;
+  list-style-position: outside;
+}
+
+.manual-setup > summary:hover {
+  color: var(--fg);
+}
+
+.manual-setup > summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.manual-setup .install-note {
+  margin: 0.4rem 0 0.8rem;
+  max-width: 62ch;
+}
+
 /* --------------------------------------------------------------- tables */
 
 .table-wrap {

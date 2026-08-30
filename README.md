@@ -187,6 +187,24 @@ Two build arguments:
 | `SITE_URL` | `https://tui.tools` | The canonical host. Feeds `site`, and through it every canonical link, the sitemap and `robots.txt`. |
 | `GITHUB_TOKEN` | empty | Lifts the GitHub API rate limit for the catalog step. |
 
+Two environment variables reach the catalog step as well, both about the
+package repository:
+
+| Variable | Default | Why |
+| --- | --- | --- |
+| `TUI_PKGS_URL` | `https://pkgs.tui.tools` | Where the family's apt, dnf and pacman repository lives. |
+| `TUI_PKGS_LIVE` | unset | `true` or `false` skips the probe below and forces the answer, for a build that has to be deterministic. |
+
+The distro channels are declared in every tool's `tool.json` with
+`"available": false`, because saying otherwise while nothing answers at
+`pkgs.tui.tools` would be a lie a reader discovers at their own shell prompt.
+So the catalog step sends one `HEAD` to `TUI_PKGS_URL/install.sh` per build.
+If it answers, the channels whose packages that release actually carries are
+promoted to available and the install pages turn the commands on. If it does
+not answer — not deployed, offline build, a slow day — the pages stay on
+*coming soon*, which is what they say anyway. There is no wrong answer to
+fall back to, and no file to edit on the day the repository goes up.
+
 `GITHUB_TOKEN` is worth spelling out. Without it the catalog script uses the
 anonymous GitHub API, capped at **60 requests per hour per IP** and shared with
 every other anonymous caller behind the same address. One catalog run costs
