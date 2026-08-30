@@ -7,27 +7,39 @@
 // optional, so a dialog that is not an install command stays plain.
 const { title, command, soon = false, sigil = "$", tool = "", manager = "" } = Astro.props;
 const lines = command.split("\n");
+
+// The copy button is rendered twice: once in the title row and once beside the
+// command. On a phone the command needs the full width to scroll in, so the
+// title-row copy is the visible one; from 34rem up the one beside the command
+// takes over. Only ever one of them is in the accessibility tree, because the
+// other is `display: none`.
+const copyProps = {
+  type: "button",
+  "data-copy": command,
+  "data-copied": "false",
+  "data-umami-event": "install-copy",
+  "data-umami-event-tool": tool || "family",
+  "data-umami-event-manager": manager || "none",
+  "aria-label": `Copy: ${lines[0]}`,
+};
 ---
 
 <div class:list={["dialog", { "is-soon": soon }]}>
   <div class="dialog-title">
     <span class="lhs">{title}</span>
-    {soon && <span class="chip chip-unreleased">coming soon</span>}
+    <span class="rhs">
+      {soon && <span class="chip chip-unreleased">coming soon</span>}
+      <button class="copy copy-in-title" {...copyProps}>
+        <span class="key" aria-hidden="true">y</span>
+        <span data-copy-label>copy</span>
+      </button>
+    </span>
   </div>
   <div class="dialog-body">
     <pre><code>{lines.map((line, index) => (
       <span>{index === 0 ? <span class="sigil">{sigil} </span> : <span class="sigil">  </span>}{line}{index < lines.length - 1 ? "\n" : ""}</span>
     ))}</code></pre>
-    <button
-      type="button"
-      class="copy"
-      data-copy={command}
-      data-copied="false"
-      data-umami-event="install-copy"
-      data-umami-event-tool={tool || "family"}
-      data-umami-event-manager={manager || "none"}
-      aria-label={`Copy: ${lines[0]}`}
-    >
+    <button class="copy copy-beside" {...copyProps}>
       <span class="key" aria-hidden="true">y</span>
       <span data-copy-label>copy</span>
     </button>

@@ -42,7 +42,9 @@
   --step-1: 1.125rem;
   --step-2: clamp(1.35rem, 1.1rem + 1.1vw, 1.75rem);
   --step-3: clamp(1.75rem, 1.3rem + 2.2vw, 2.6rem);
-  --step-4: clamp(2.1rem, 1.4rem + 3.4vw, 3.5rem);
+  /* The hero headline. The floor is set for a 390px phone, where the line has
+     to break into three and still leave room for the lede above the fold. */
+  --step-4: clamp(1.85rem, 1.05rem + 3.6vw, 3.5rem);
 }
 
 *,
@@ -268,6 +270,39 @@ hr {
   box-shadow: inset 0 -2px 0 var(--accent);
 }
 
+/* On a phone the five links do not fit beside the brand, and letting them wrap
+   drops a single link onto a second row. Below 34rem the nav takes a row of its
+   own under the brand and scrolls sideways instead of wrapping — no hamburger,
+   every link still one tap away. It bleeds to the page edges so a link that is
+   cut off reads as scrollable rather than as a mistake. */
+@media (max-width: 33.999rem) {
+  .masthead-inner {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.35rem;
+    padding-block: 0.55rem 0.4rem;
+  }
+
+  .nav {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    margin-inline: -1.25rem;
+    padding-inline: 1.25rem;
+  }
+
+  .nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .nav a {
+    white-space: nowrap;
+    padding: 0.3rem 0.45rem;
+    letter-spacing: -0.02em;
+  }
+}
+
 .footer {
   border-top: 1px solid var(--frame);
   margin-top: 4rem;
@@ -363,6 +398,13 @@ hr {
   min-width: 0;
 }
 
+.dialog-title .rhs {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: none;
+}
+
 .dialog-body {
   display: flex;
   align-items: stretch;
@@ -424,6 +466,33 @@ hr {
 .copy[data-copied="true"] {
   color: var(--family);
   background: color-mix(in srgb, var(--family) 16%, transparent);
+}
+
+/* Two copy buttons are in the markup and exactly one of them is displayed. On a
+   phone the command is the widest thing on the page and needs every pixel to
+   scroll in, so copy moves up into the title row; from 34rem it sits beside the
+   command as a full-height column, which is the desktop layout. */
+.copy-in-title {
+  display: none;
+}
+
+@media (max-width: 33.999rem) {
+  .copy-in-title {
+    display: inline-flex;
+    align-self: center;
+    border-left: 0;
+    padding: 0.2rem 0.35rem 0.2rem 0.5rem;
+    margin-right: -0.35rem;
+    border-radius: 6px;
+  }
+
+  .copy-beside {
+    display: none;
+  }
+
+  .dialog-title {
+    padding-block: 0.45rem;
+  }
 }
 
 .dialog.is-soon {
