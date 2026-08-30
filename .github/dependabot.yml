@@ -1,0 +1,34 @@
+# Dependabot for the family website.
+#
+# The site is an Astro build, so npm is what needs watching here, alongside the
+# actions the publish workflow runs on.
+#
+# No commit-message prefix is set on purpose: Dependabot's default subject
+# ("Bump x from a to b") already reads like the plain imperative sentences the
+# rest of the history is written in.
+version: 2
+
+updates:
+  # Minor and patch updates arrive as one weekly pull request; a major is left
+  # on its own, because it is an API change that deserves to be read.
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      npm-deps:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      github-actions:
+        patterns:
+          - "*"
