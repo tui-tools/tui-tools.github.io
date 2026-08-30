@@ -67,6 +67,17 @@ jobs:
         with:
           path: dist
 
+      # The catalog is what decides what every page says, so its hash is the
+      # honest answer to "did the site's content change?". The ship job below
+      # turns it into the build stamp it sends to the container host; see the
+      # comment there for why that host needs to be told.
+      - name: keep the catalog for the ship job
+        uses: actions/upload-artifact@v7
+        with:
+          name: catalog
+          path: src/data/catalog.json
+          retention-days: 1
+
   deploy:
     name: deploy to Pages
     needs: build
@@ -78,52 +89,97 @@ jobs:
       - id: deployment
         uses: actions/deploy-pages@v5
 
-  # Off unless the owner turns it on, and unrelated to Pages: it is the same
-  # rebuild signal, sent to a second host.
+  # Off unless the owner turns it on, and unrelated to Pages: the same site,
+  # shipped to a second host.
   #
-  # The site's content lives outside this repository — a release in another repo
-  # changes the page here with no commit to push — which is why Pages is
-  # rebuilt hourly rather than only on push. A container host has the same
-  # problem and cannot solve it on its own: nothing in its git history changed,
-  # so nothing tells it to rebuild. This job is that telling.
+  # Quave ONE has no GitHub App installed on this organization — that is a click
+  # only the owner can make — so the source is pushed rather than pulled, with
+  # the documented three-step Code API: ask for a pre-signed URL, PUT the
+  # tarball, say it landed. The last step triggers the build.
   #
-  # Quave ONE's public API documents `POST /api/public/v1/app-env/build` for
-  # exactly this. `forceNewBuild` is not optional here: without it the platform
-  # sees identical source and skips the build, which is precisely the case this
-  # job exists for.
+  # Which leaves the problem this job really exists for. The site's content
+  # lives outside this repository: a release in another repo changes a page here
+  # with no commit to push, which is why Pages rebuilds hourly rather than only
+  # on push. The container host sees the same identical source every hour and
+  # reuses the image it already built — correctly, and uselessly, because the
+  # catalog is baked into that image. So the tarball carries `.build-stamp`, the
+  # hash of the catalog *this run* built. Identical content, identical stamp,
+  # identical source: the platform reuses the image and no build minutes are
+  # spent. A release upstream changes the catalog, the stamp, the source and the
+  # `COPY . .` layer in one go, and the image is rebuilt with the new content.
   #
-  # To turn it on, set the repository variables and the secret:
+  # To turn it on, set the repository variable and the secret:
   #
-  #   gh variable set QUAVE_REDEPLOY_URL --body https://api.quave.cloud/api/public/v1/app-env/build
-  #   gh variable set QUAVE_ENV_NAME     --body tui-tools-tui-tools-site-production
-  #   gh secret   set QUAVE_API_TOKEN    # an app-environment or user token
+  #   gh variable set QUAVE_ENV_NAME  --body tui-tools-tui-site-production
+  #   gh secret   set QUAVE_API_TOKEN                # app-environment token
   #
-  # Leave QUAVE_REDEPLOY_URL unset and the job is skipped, which is the state
-  # this repository is in while Pages is still the host.
-  redeploy:
-    name: rebuild on the container host
+  # Leave QUAVE_ENV_NAME unset and the job is skipped, which is the state this
+  # repository is in while Pages is the only host.
+  ship:
+    name: ship to the container host
     needs: build
-    if: vars.QUAVE_REDEPLOY_URL != ''
+    if: vars.QUAVE_ENV_NAME != ''
     runs-on: ubuntu-latest
+    env:
+      API: ${{ vars.QUAVE_API_URL || 'https://api.quave.cloud/api/public/v1' }}
+      ENV_NAME: ${{ vars.QUAVE_ENV_NAME }}
+      TOKEN: ${{ secrets.QUAVE_API_TOKEN }}
     steps:
-      - name: trigger the build
-        env:
-          URL: ${{ vars.QUAVE_REDEPLOY_URL }}
-          ENV_NAME: ${{ vars.QUAVE_ENV_NAME }}
-          TOKEN: ${{ secrets.QUAVE_API_TOKEN }}
+      - uses: actions/checkout@v7
+
+      - name: fetch the catalog this run built
+        uses: actions/download-artifact@v8
+        with:
+          name: catalog
+          path: ${{ runner.temp }}/catalog
+
+      - name: pack the source
         run: |
           set -euo pipefail
 
-          if [ -z "$TOKEN" ] || [ -z "$ENV_NAME" ]; then
-            echo "QUAVE_REDEPLOY_URL is set but QUAVE_API_TOKEN or QUAVE_ENV_NAME is not."
-            echo "All three are needed; see the comment above this job."
+          if [ -z "$TOKEN" ]; then
+            echo "QUAVE_ENV_NAME is set but QUAVE_API_TOKEN is not; both are needed."
             exit 1
           fi
 
-          # --fail-with-body so a 401 or a 404 stops the job and still prints
-          # what the API said, rather than leaving a stale site up in silence.
-          curl --silent --show-error --fail-with-body \
-            -X POST "$URL" \
-            -H "Authorization: $TOKEN" \
+          # The stamp, and the whole reason this is not a plain redeploy call.
+          sha256sum "${RUNNER_TEMP}/catalog/catalog.json" | cut -d' ' -f1 > .build-stamp
+
+          # Reproducible flags throughout — sorted entries, a fixed mtime, no
+          # owner names, and gzip without its timestamp header — so a run that
+          # changed nothing produces a byte-identical tarball, which is what
+          # lets the platform recognise it as the same source.
+          tar --sort=name --mtime='UTC 1970-01-01' \
+              --owner=0 --group=0 --numeric-owner \
+              --exclude=./.git \
+              --exclude=./node_modules \
+              --exclude=./dist \
+              --exclude=./.astro \
+              -cf - . | gzip -n > "${RUNNER_TEMP}/source.tgz"
+
+      # --fail-with-body throughout, so a 401 or a 404 stops the job and still
+      # prints what the API said, rather than leaving a stale site up in silence.
+      - name: upload it and trigger the build
+        run: |
+          set -euo pipefail
+
+          key_response=$(curl --silent --show-error --fail-with-body \
+            -X POST "${API}/app-env/request-storage-key" \
+            -H "Authorization: ${TOKEN}" \
             -H 'Content-Type: application/json' \
-            -d "$(jq -nc --arg env "$ENV_NAME" '{envName: $env, forceNewBuild: true}')"
+            -d "$(jq -nc --arg env "$ENV_NAME" '{envName: $env, fileExtension: "tgz"}')")
+
+          upload_url=$(printf '%s' "$key_response" | jq -er '.uploadUrl')
+          storage_key=$(printf '%s' "$key_response" | jq -er '.storageKey')
+
+          curl --silent --show-error --fail-with-body \
+            -X PUT "$upload_url" \
+            -H 'Content-Type: application/x-gzip' \
+            --data-binary "@${RUNNER_TEMP}/source.tgz" > /dev/null
+
+          curl --silent --show-error --fail-with-body \
+            -X POST "${API}/app-env/upload-storage-event" \
+            -H "Authorization: ${TOKEN}" \
+            -H 'Content-Type: application/json' \
+            -d "$(jq -nc --arg env "$ENV_NAME" --arg key "$storage_key" \
+                    '{envName: $env, storageKey: $key}')"
