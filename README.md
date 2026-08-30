@@ -98,6 +98,10 @@ better answer if the family grows.
 
 ### The custom domain (owner action)
 
+This is the custom domain *on Pages*. To move the domain to a container host
+instead, see [Cutover to Quave ONE](#cutover-to-quave-one-owner-action) below,
+which supersedes this.
+
 The site is written so switching to `tui.tools` is two settings and no code:
 
 1. Set the repository **variable** `SITE_DOMAIN` to `tui.tools`
@@ -192,6 +196,62 @@ curl -s localhost:8099/ | grep -o '<title>[^<]*</title>'
 curl -s localhost:8099/sitemap-index.xml
 curl -s localhost:8099/robots.txt
 ```
+
+### Keeping the container host current
+
+The site's content lives outside this repository: a release in another repo
+changes a page here with no commit to push. That is why Pages rebuilds hourly
+rather than only on push, and a container host has the same problem without the
+same answer — nothing in its git history changed, so nothing tells it to
+rebuild.
+
+`publish.yml` has a `redeploy` job for that. It is **skipped** unless the
+repository variable `QUAVE_REDEPLOY_URL` is set, so it costs nothing today. When
+set, it `POST`s to Quave ONE's documented build endpoint after every successful
+site build — the hourly one included — with `forceNewBuild: true`, which is what
+makes the platform rebuild despite seeing identical source.
+
+```sh
+gh variable set QUAVE_REDEPLOY_URL --body https://api.quave.cloud/api/public/v1/app-env/build
+gh variable set QUAVE_ENV_NAME     --body tui-tools-tui-tools-site-production
+gh secret   set QUAVE_API_TOKEN    # an app-environment token, or a user token
+```
+
+Set `QUAVE_REDEPLOY_URL` without the other two and the job fails loudly rather
+than leaving a site that quietly stops updating.
+
+### Cutover to Quave ONE (owner action)
+
+In order. Steps 1–4 leave Pages serving as it does now, so each one is
+reversible until the DNS change in step 5.
+
+1. **Create the app** on Quave ONE from `tui-tools/tui-tools.github.io`,
+   branch `main`, Docker preset **CUSTOM** with the `Dockerfile` at the
+   repository root. Set the environment's **port to 3000**, health check path
+   to `/healthz`, and SSL on.
+2. **Set the build variables** on that environment (`Env Vars` tab, *Used for:
+   Build*): `SITE_URL=https://tui.tools` and `GITHUB_TOKEN=<read-only token>`.
+   The token matters — see the rate-limit note above. Deploy once and check
+   `https://<env>.svc-<region>.zcloud.ws/` serves the grid, `/sitemap-index.xml`
+   carries `https://tui.tools/…`, and `/robots.txt` points at it.
+3. **Turn on the rebuild signal**: the two variables and the secret above. The
+   next hourly `publish` run should show the `redeploy` job green.
+4. **Add the host** `tui.tools` to the Quave ONE environment and read back the
+   CNAME target it gives you. Nothing resolves yet.
+5. **Point DNS**: `CNAME tui.tools → <the Quave ONE target>`. If `tui.tools` is
+   an apex domain and the registrar has no ALIAS/ANAME support, host the site at
+   `www.tui.tools` and redirect the apex. Wait for the certificate to issue.
+6. **Set `SITE_DOMAIN`** to `tui.tools` so the Pages build also renders the new
+   canonical host — for the window in which both are up, they agree.
+7. **Retire Pages** once Quave ONE has served the domain for a few days without
+   incident: delete the `deploy` job (and the `pages`/`id-token` permissions and
+   the `write CNAME` step) from `publish.yml`, leaving `build` as the check that
+   the site still compiles and `redeploy` as the thing that ships it. Then turn
+   Pages off in the repository settings.
+
+The one thing to *not* do out of order is step 5 before step 4: DNS pointing at
+a host that has not been told to answer for the domain is a hard outage, whereas
+every other step is inert until the one after it.
 
 ## Local development
 

@@ -77,3 +77,53 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+
+  # Off unless the owner turns it on, and unrelated to Pages: it is the same
+  # rebuild signal, sent to a second host.
+  #
+  # The site's content lives outside this repository — a release in another repo
+  # changes the page here with no commit to push — which is why Pages is
+  # rebuilt hourly rather than only on push. A container host has the same
+  # problem and cannot solve it on its own: nothing in its git history changed,
+  # so nothing tells it to rebuild. This job is that telling.
+  #
+  # Quave ONE's public API documents `POST /api/public/v1/app-env/build` for
+  # exactly this. `forceNewBuild` is not optional here: without it the platform
+  # sees identical source and skips the build, which is precisely the case this
+  # job exists for.
+  #
+  # To turn it on, set the repository variables and the secret:
+  #
+  #   gh variable set QUAVE_REDEPLOY_URL --body https://api.quave.cloud/api/public/v1/app-env/build
+  #   gh variable set QUAVE_ENV_NAME     --body tui-tools-tui-tools-site-production
+  #   gh secret   set QUAVE_API_TOKEN    # an app-environment or user token
+  #
+  # Leave QUAVE_REDEPLOY_URL unset and the job is skipped, which is the state
+  # this repository is in while Pages is still the host.
+  redeploy:
+    name: rebuild on the container host
+    needs: build
+    if: vars.QUAVE_REDEPLOY_URL != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: trigger the build
+        env:
+          URL: ${{ vars.QUAVE_REDEPLOY_URL }}
+          ENV_NAME: ${{ vars.QUAVE_ENV_NAME }}
+          TOKEN: ${{ secrets.QUAVE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$TOKEN" ] || [ -z "$ENV_NAME" ]; then
+            echo "QUAVE_REDEPLOY_URL is set but QUAVE_API_TOKEN or QUAVE_ENV_NAME is not."
+            echo "All three are needed; see the comment above this job."
+            exit 1
+          fi
+
+          # --fail-with-body so a 401 or a 404 stops the job and still prints
+          # what the API said, rather than leaving a stale site up in silence.
+          curl --silent --show-error --fail-with-body \
+            -X POST "$URL" \
+            -H "Authorization: $TOKEN" \
+            -H 'Content-Type: application/json' \
+            -d "$(jq -nc --arg env "$ENV_NAME" '{envName: $env, forceNewBuild: true}')"
