@@ -154,7 +154,10 @@ jobs:
           fi
 
           # The stamp, and the whole reason this is not a plain redeploy call.
-          sha256sum "${RUNNER_TEMP}/catalog/catalog.json" | cut -d' ' -f1 > .build-stamp
+          # It covers the catalog AND the source commit: a push that changes
+          # templates without changing the catalog must rebuild the image too.
+          { sha256sum "${RUNNER_TEMP}/catalog/catalog.json" | cut -d' ' -f1; echo "${GITHUB_SHA}"; } \
+            | sha256sum | cut -d' ' -f1 > .build-stamp
 
           # Reproducible flags throughout — sorted entries, a fixed mtime, no
           # owner names, and gzip without its timestamp header — so a run that
