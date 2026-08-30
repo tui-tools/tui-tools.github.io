@@ -38,6 +38,20 @@ const canonical = new URL(Astro.url.pathname, Astro.site ?? "https://tui-tools.g
     <meta property="og:url" content={canonical} />
     <meta name="twitter:card" content="summary" />
     <style set:html={accent === "tool" ? ":root { --accent: var(--tool); }" : ""} />
+
+    <!-- Umami, self-hosted on Quave ONE. No cookies, no cross-site identifier,
+         no personal data: it counts page views and the handful of named events
+         listed in the site README. `data-do-not-track` makes it stand down for
+         anyone whose browser asks not to be tracked, and `data-domains` keeps
+         it quiet on forks and local builds. The script is named stats.js so the
+         usual blocklists do not decide the question for you either way. -->
+    <script
+      is:inline
+      defer
+      src="https://tui-analytics-production-tui-tools.svc-us5.zcloud.ws/stats.js"
+      data-website-id="d930a4b8-72ea-43ed-92b0-f159d639210d"
+      data-domains="tui-tools.github.io,tui.tools"
+      data-do-not-track="true"></script>
   </head>
   <body>
     <a class="skip" href="#main">Skip to content</a>

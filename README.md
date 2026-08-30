@@ -152,6 +152,40 @@ without a site to build.
 
 ![The install page](docs/screenshots/install.png)
 
+## Analytics
+
+The site counts visits with [Umami](https://umami.is), self-hosted on
+[Quave ONE](https://quave.one). Nothing is sent to Google, and there is no
+third-party network the numbers feed into.
+
+**What is collected.** A page view: the path, the referrer, the screen size, the
+browser and OS names, and a country derived from the request. Plus the named
+events below, each with a couple of labels. That is the whole list.
+
+**What is not.** No cookies and no `localStorage`: Umami stores nothing in your
+browser. No IP address is kept — it is hashed together with a daily-rotating
+salt to recognise a repeat visit within one day, and cannot be reversed or
+linked across days. No cross-site identifier, no profile, no ad network.
+
+**Events.** These names are stable; treat them as an interface, and add rather
+than rename.
+
+| Event | Fired when | Props |
+| --- | --- | --- |
+| `install-copy` | A command's copy button is pressed | `tool`, `manager` |
+| `distro-select` | A package manager tab is chosen on a tool page | `manager` |
+| `download` | A release asset link is clicked | `tool`, `asset` |
+| `repo-click` | A tool's source repository link is clicked | `tool` |
+
+`tool` is a tool name (or `family` for a command that is not tool-specific),
+`manager` is the install path (`pacman`, `aur`, `apt`, `dnf`, `zypper`,
+`binary`, `source`, …).
+
+**How to opt out.** Turn on "Do Not Track" in your browser and the script stands
+down: the tag carries `data-do-not-track="true"`, so it sends nothing at all.
+Any content blocker also stops it, and the site works exactly the same without
+it. The script is served from the site's own analytics host as `stats.js`.
+
 ## The design, in one paragraph
 
 Every tool in the family shows a command inside a box and asks `y` or `n` before
@@ -160,8 +194,9 @@ the site sits in that same dialog, and the copy button **is** the `y` key. The
 palette is Tokyo Night, carrying the meaning the branding gives it — green marks
 what the family shares, blue marks what one tool adds, so family pages accent
 green and a tool's page accents blue. Anything the machine says is set in
-monospace; anything we say is set in sans. No external requests: fonts are a
-system stack, and every image is served from this repository.
+monospace; anything we say is set in sans. Fonts are a system stack and every
+image is served from this repository; the one request that leaves the page is
+the analytics script described above.
 
 ## Unofficial
 

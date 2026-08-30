@@ -200,7 +200,16 @@ const checks = [
             <dt>Since</dt>
             <dd>{tool.since}</dd>
             <dt>Source</dt>
-            <dd><a href={tool.repo} rel="noopener">{tool.repo.replace("https://github.com/", "")}</a></dd>
+            <dd>
+              <a
+                href={tool.repo}
+                rel="noopener"
+                data-umami-event="repo-click"
+                data-umami-event-tool={tool.name}
+              >
+                {tool.repo.replace("https://github.com/", "")}
+              </a>
+            </dd>
             <dt>Config</dt>
             <dd>
               {security.config_paths.map((path) => (
@@ -216,7 +225,12 @@ const checks = [
             <code>--demo</code> runs against sample data. Every key works, every command
             is built and previewed for real, and nothing touches your system.
           </p>
-          <CommandDialog title="Demo mode" command={`${tool.binary} --demo`} />
+          <CommandDialog
+            title="Demo mode"
+            command={`${tool.binary} --demo`}
+            tool={tool.name}
+            manager="demo"
+          />
         </section>
       </aside>
     </div>
@@ -237,6 +251,8 @@ const checks = [
               aria-controls={`pane-${entry.id}`}
               aria-selected={index === openIndex ? "true" : "false"}
               tabindex={index === openIndex ? "0" : "-1"}
+              data-umami-event="distro-select"
+              data-umami-event-manager={entry.id}
             >
               <span class="dot" data-soon={String(!entry.available)} aria-hidden="true" />
               {entry.label}
@@ -282,6 +298,8 @@ const checks = [
                       : `${entry.label} · ${entry.package}`
                   }
                   command={command.command}
+                  tool={tool.name}
+                  manager={entry.id}
                   soon={!entry.available}
                 />
               ))}
@@ -344,7 +362,15 @@ const checks = [
                 {tool.release.assets.map((asset) => (
                   <tr>
                     <td class="mono">
-                      <a href={asset.url} rel="noopener">{asset.name}</a>
+                      <a
+                        href={asset.url}
+                        rel="noopener"
+                        data-umami-event="download"
+                        data-umami-event-tool={tool.name}
+                        data-umami-event-asset={asset.name}
+                      >
+                        {asset.name}
+                      </a>
                     </td>
                     <td class="mono">{formatSize(asset.size)}</td>
                     <td class="sum">{asset.sha256 ?? "—"}</td>

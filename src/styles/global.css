@@ -305,6 +305,30 @@ hr {
   max-width: 62ch;
 }
 
+/* The site runs on someone's machine, and it says whose. The logo is drawn
+ * for a dark background, which is the only background this site has. */
+.footer-hosted {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1.4rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-decoration: none;
+  opacity: 0.7;
+  transition: opacity 0.25s;
+}
+
+.footer-hosted:hover,
+.footer-hosted:focus-visible {
+  opacity: 1;
+}
+
+.footer-hosted img {
+  height: 16px;
+  width: auto;
+}
+
 /* ------------------------------------------------------------- the dialog
  *
  * The signature of the site. Every tool in the family shows a command inside

@@ -105,6 +105,8 @@ sudo zypper refresh`,
                 <CommandDialog
                   title={`${tool.name} ${tool.release?.tag ?? ""} · linux/amd64`}
                   command={binary.commands[0].command}
+                  tool={tool.name}
+                  manager="binary"
                 />
               );
             })
@@ -142,10 +144,17 @@ sudo zypper refresh`,
             <section class="panel" id={manager.id}>
               <h2>{manager.label}</h2>
               <div class="stack" style="margin-top:0">
-                <CommandDialog title={manager.setupTitle} command={manager.setup} soon />
+                <CommandDialog
+                  title={manager.setupTitle}
+                  command={manager.setup}
+                  manager={manager.id}
+                  soon
+                />
                 <CommandDialog
                   title={manager.installTitle}
                   command={manager.install}
+                  tool={anyName}
+                  manager={manager.id}
                   soon
                 />
               </div>
@@ -170,6 +179,7 @@ sudo zypper refresh`,
           <CommandDialog
             title="Detect the package manager and add the repository"
             command="curl -fsSL https://pkgs.tui.tools/install.sh | sh"
+            manager="install-script"
             soon
           />
         </div>
@@ -196,6 +206,7 @@ sudo zypper refresh`,
             title="Check an archive against the release's checksums.txt"
             command={`curl -fsSLO https://github.com/tui-tools/${anyName}/releases/latest/download/checksums.txt
 sha256sum -c checksums.txt --ignore-missing`}
+            manager="checksums"
           />
           <p style="color:var(--muted);font-size:0.92rem">
             <code>--ignore-missing</code> checks only the files you actually
