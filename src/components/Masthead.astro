@@ -1,9 +1,12 @@
 ---
 const { section = "" } = Astro.props;
 
+// The canonical order the packages index repeats, so the two sites read as one
+// bar. Packages lives on its own host; it is a normal link, not a new tab.
 const links = [
   { id: "tools", href: "/", label: "Tools" },
   { id: "install", href: "/install/", label: "Install" },
+  { id: "packages", href: "https://pkgs.tui.tools/", label: "Packages", external: true },
   { id: "security", href: "/security/", label: "Security" },
   { id: "kit", href: "/kit/", label: "Kit" },
 ];
@@ -18,7 +21,11 @@ const links = [
     <nav class="nav" aria-label="Main">
       {
         links.map((link) => (
-          <a href={link.href} aria-current={section === link.id ? "page" : undefined}>
+          <a
+            href={link.href}
+            rel={link.external ? "noopener" : undefined}
+            aria-current={section === link.id ? "page" : undefined}
+          >
             {link.label}
           </a>
         ))
