@@ -116,7 +116,23 @@ HTTPS* in the repository's Pages settings.
 Nothing else in the site hardcodes the host: every internal link is
 root-relative, which is why this is the organization site repository
 (`tui-tools.github.io`, served at `/`) rather than a project repository served
-under a path.
+under a path. The three places that need an absolute URL — the canonical link,
+`sitemap-index.xml` and `robots.txt` — all derive it from the same `site` value,
+so `SITE_URL` is the only knob.
+
+### Sitemap and robots
+
+Both are generated at build time and neither is committed:
+
+- **`sitemap-index.xml` / `sitemap-0.xml`** come from
+  [`@astrojs/sitemap`](https://docs.astro.build/en/guides/integrations-guide/sitemap/),
+  which walks the pages Astro actually rendered — so a new tool appears in the
+  sitemap for the same reason it appears in the grid, with no list to maintain.
+  A tool page carries a `lastmod` taken from its latest release date; a page with
+  no such date carries none, because an invented `lastmod` is worse than an
+  absent one.
+- **`robots.txt`** is the endpoint `src/pages/robots.txt.js`, which points at
+  the sitemap on whatever host `site` names.
 
 ## Local development
 
@@ -146,6 +162,7 @@ without a site to build.
 | `src/pages/install.astro` | Family-level install: the repository setup per package manager, and how to verify a download |
 | `src/pages/security.astro` | The family's principles, every tool's answers, and how to report |
 | `src/pages/kit.astro` | What `tui-kit` is |
+| `src/pages/robots.txt.js` | `robots.txt`, built from `site` so no host is hardcoded |
 | `src/components/CommandDialog.astro` | The site's one borrowed idea, below |
 | `src/lib/markdown.js` | The safe markdown subset a manifest's `description` may use |
 | `src/styles/global.css` | Tokyo Night, and the type rule: the machine speaks in mono, we speak in sans |

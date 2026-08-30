@@ -321,21 +321,8 @@ async function main() {
   await mkdir(dirname(OUT_JSON), { recursive: true });
   await writeFile(OUT_JSON, `${JSON.stringify(catalog, null, 2)}\n`);
   console.log(`wrote ${OUT_JSON}: ${tools.length} tools`);
-
-  // The sitemap is generated here rather than committed, for the same reason
-  // the catalog is: a new tool must not need an edit to this repository.
-  const base = (process.env.SITE_URL ?? "https://tui-tools.github.io").replace(/\/$/, "");
-  const paths = [
-    "/",
-    "/install/",
-    "/security/",
-    "/kit/",
-    ...tools.map((tool) => `/tools/${tool.name}/`),
-  ];
-  await writeFile(
-    join(ROOT, "public/sitemap.txt"),
-    `${paths.map((path) => base + path).join("\n")}\n`,
-  );
+  // The sitemap is not written here: `@astrojs/sitemap` derives it from the
+  // pages Astro actually renders, against the `site` in astro.config.mjs.
 }
 
 await main().catch(async (error) => {
