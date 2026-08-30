@@ -281,51 +281,92 @@ owner's.
    zCloud, region `us-5` (where the analytics already live). It deploys by
    source upload rather than from GitHub, because that needed no click; see
    above.
-2. ~~**Set the build variables**~~ — `SITE_URL=https://tui.tools`, marked
-   *Build*. `GITHUB_TOKEN` is **not** set: the catalog build fits inside the
-   anonymous API's 60-per-hour limit today, and the first build proved it. If a
-   build ever fails on a rate limit, that is the moment to add one — see below.
+2. ~~**Set the build variable**~~ — `SITE_URL=https://tui.tools`, marked
+   *Build*. `GITHUB_TOKEN` is **not** set and now has to be; see
+   [The build token](#the-build-token-owner-action) below, which is the one
+   thing still standing between this and a site that updates itself.
 3. ~~**Turn on the rebuild signal**~~ — `QUAVE_ENV_NAME` and `QUAVE_API_TOKEN`
    are set, and the `ship` job runs on every `publish`.
 4. ~~**Add the hosts**~~ — `tui.tools` and `www.tui.tools` on the site
-   environment, `analytics.tui.tools` on the Umami one. All three sit
-   `VALIDATING` until DNS answers. A host that stays invalid long enough is
-   auto-disabled and has to be re-enabled from the Hosts tab, so do not leave
-   step 5 for weeks.
-5. **Point DNS** — the records are in the table below. `tui.tools` is an apex,
-   so it needs an `ALIAS`/`ANAME` record, or Cloudflare's CNAME flattening,
-   which does the same thing at the resolver. A registrar that offers neither
-   cannot serve the apex from a container host at all; host at `www.tui.tools`
-   and redirect the apex there instead. Certificates issue on their own once the
-   names resolve.
+   environment, `analytics.tui.tools` on the Umami one.
+5. ~~**Point DNS**~~ — done in Cloudflare, and all three names are `VALID` with
+   Let's Encrypt certificates issued. The records:
+
+   | Type | Name | Value |
+   | --- | --- | --- |
+   | `CNAME`, flattened | `tui.tools` | `tui-tools-tui-site-production.zcloud.services` |
+   | `CNAME` | `www.tui.tools` | `tui-tools-tui-site-production.zcloud.services` |
+   | `CNAME` | `analytics.tui.tools` | `tui-tools-tui-analytics-production.zcloud.services` |
+
+   The apex is the interesting one. `tui.tools` cannot hold a plain `CNAME` —
+   no apex can — so it relies on Cloudflare's CNAME flattening, which resolves
+   the target and answers with `A` records. An `ALIAS`/`ANAME` record does the
+   same thing at registrars that offer it; one that offers neither cannot serve
+   an apex from a container host at all, and the answer there is to host at
+   `www.tui.tools` and redirect the apex to it.
+
+   The records are DNS-only, not proxied. Proxying them through Cloudflare would
+   work but needs an Origin CA certificate on the Quave ONE side; see the
+   platform's *Cloudflare as a proxy* guide before turning the orange cloud on.
 6. ~~**Set `SITE_DOMAIN`**~~ — already `tui.tools`, so the Pages build renders
    the same canonical host the container does. For the overlap in which both are
    up, they agree.
-7. **Retire Pages** once Quave ONE has served the domain for a few days without
-   incident: delete the `deploy` job (and the `pages`/`id-token` permissions and
-   the `write CNAME` step) from `publish.yml`, leaving `build` as the check that
-   the site still compiles and `ship` as the thing that ships it. Then turn
-   Pages off in the repository settings.
+7. **Keep Pages**, which is a change of plan and worth the paragraph. The
+   original step here was to delete the `deploy` job once Quave ONE had proven
+   itself. Do not: `tui-tools.github.io` is the URL every existing link and
+   bookmark uses, and the redirect from it to `tui.tools` is something GitHub
+   does *only while Pages is enabled with the custom domain set*. Turn Pages off
+   and those links 404 rather than arriving. So Pages stays, its job now being
+   to serve one redirect, and `dist/CNAME` — written by the `write CNAME` step
+   from the `SITE_DOMAIN` variable — is what tells it where to send them.
 
-| Type | Name | Value |
-| --- | --- | --- |
-| `ALIAS` / `ANAME` (or a flattened `CNAME`) | `tui.tools` | `tui-tools-tui-site-production.zcloud.services` |
-| `CNAME` | `www.tui.tools` | `tui-tools-tui-site-production.zcloud.services` |
-| `CNAME` | `analytics.tui.tools` | `tui-tools-tui-analytics-production.zcloud.services` |
+   `www.tui.tools` is the other half of the same idea and is handled in the
+   image instead: `nginx.conf` answers that name with a 301 to the apex,
+   preserving the path. Two hosts serving identical HTML is a duplicate a
+   crawler has to resolve on its own; a redirect resolves it first.
 
-The one thing to *not* do out of order is step 5 before step 4: DNS pointing at
-a host that has not been told to answer for the domain is a hard outage, whereas
-every other step is inert until the one after it.
+Two loose ends beyond the token:
 
-### After DNS
+- The Umami tag in `src/layouts/Base.astro` now points at
+  `https://analytics.tui.tools/script.js`, which ships with the next successful
+  build. Change the website's domain inside Umami to match, so the numbers keep
+  accruing to the same site rather than starting a new one.
+- The analytics environment also carries a host `analytic.tui.tools` — singular,
+  a typo, with no DNS behind it. It will sit invalid until the platform
+  auto-disables it. Remove it from the Hosts tab.
 
-Two follow-ups, neither of which can be done before the names resolve:
+### The build token (owner action)
 
-- Point the Umami tag in `src/layouts/Base.astro` at `https://analytics.tui.tools/script.js`,
-  and change the website's domain inside Umami to match, so the existing numbers
-  keep accruing to the same site.
-- Turn on *Enforce HTTPS* wherever Pages is still serving, until step 7 retires
-  it.
+The container build needs a GitHub token, and this is no longer theoretical. The
+first build squeaked under the anonymous limit; the second, minutes later, died
+at the sixteenth of seventeen repositories:
+
+```
+GET https://api.github.com/repos/tui-tools/tui-samba/releases/latest → 403
+API rate limit exceeded for 88.198.69.252.
+```
+
+That address is the platform's build node, shared with every other tenant
+building on it, and the site's own catalog run costs about fifty requests
+against a budget of sixty an hour. An hourly rebuild cannot fit in that, and a
+rate-limited build **fails** rather than shipping something stale — the catalog
+script's fallback is "keep what is on disk", and a fresh container has nothing.
+So until the token exists, the environment keeps serving the last image that
+built and stops picking up releases.
+
+Create a **fine-grained personal access token**:
+
+- **Resource owner**: the `tui-tools` organization (or your own account —
+  everything it reads is public).
+- **Repository access**: *Public repositories (read-only)*.
+- **Permissions**: none beyond the default `Metadata: Read`. It reads public
+  repository contents and releases, which needs no grant.
+- **Expiry**: as long as you are willing to rotate.
+
+Then set it on the environment as `GITHUB_TOKEN`, *Used for: Build*. The next
+`publish` run picks it up. Nothing in this repository needs the token: it is a
+Quave ONE environment variable, and the Actions build has the runner's own
+token with a far higher limit.
 
 ## Local development
 
