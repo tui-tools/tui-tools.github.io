@@ -2,8 +2,33 @@
 import Base from "../layouts/Base.astro";
 import CommandDialog from "../components/CommandDialog.astro";
 import catalog from "../data/catalog.json";
+import scorecard from "../data/scorecard.json";
 
 const tools = catalog.tools;
+
+// One row per repository the Scorecard step asked about: the catalog's tools
+// plus tui-kit and the tui-tools launcher, which carry no tool.json. A row
+// with no published result yet is kept and shown as pending rather than
+// dropped, so the table is the whole family either way.
+const scorecards = (scorecard.results ?? []).map((result) => ({
+  repo: result.repo,
+  badge: result.badge,
+  viewer: result.viewer,
+  published: result.status === "published",
+  score: result.score ?? null,
+  measured: result.date ? result.date.slice(0, 10) : "—",
+  // Everything that is not a 10, weakest first. -1 is Scorecard's "this check
+  // could not run here", which the chip prints as n/a rather than as a zero.
+  open: (result.checks ?? [])
+    .filter((check) => check.score < 10)
+    .sort(
+      (a, b) =>
+        // Real scores first, weakest first; the ones that could not run last.
+        (a.score < 0) - (b.score < 0) ||
+        a.score - b.score ||
+        a.name.localeCompare(b.name),
+    ),
+}));
 
 const principles = [
   {
@@ -38,14 +63,59 @@ const principles = [
   },
 ];
 
+// The signing column reads the release, not the manifest. Every tool.json in
+// the family still declares `signed_releases: false`, written before the gate
+// existed and updated tool by tool; the assets attached to the latest release
+// are the fact, and a checksums.txt.sigstore.json is what a keyless cosign
+// signature over the release looks like. Where the two disagree the release
+// wins, the same way the install channels wait for a package to exist rather
+// than trusting a manifest that says available.
+function signingState(tool) {
+  const assets = (tool.release?.assets ?? []).map((asset) => asset.name);
+  if (!tool.release) return { mark: "—", label: "no release yet", ok: false };
+  if (assets.some((name) => name.endsWith(".sigstore.json"))) {
+    return { mark: "✓", label: "cosign bundle on checksums.txt", ok: true };
+  }
+  return { mark: "✕", label: "checksums only", ok: false };
+}
+
 const rows = tools.map((tool) => ({
   name: tool.name,
   sudo: tool.security.needs_sudo === false ? "never" : "actions only",
   daemon: tool.security.no_daemon,
   network: tool.security.no_network,
   static: tool.security.static_binary,
-  signed: tool.security.signed_releases,
+  released: Boolean(tool.release),
+  signed: signingState(tool),
+  sbom: (tool.release?.assets ?? []).some((asset) =>
+    asset.name.endsWith(".cyclonedx.json"),
+  ),
 }));
+
+// What the family has not done, said here rather than left to be discovered.
+// Every one of these is a Scorecard check the table above scores below 10.
+const openItems = [
+  {
+    title: "Branch rulesets on main",
+    body:
+      "Pull request required, the two CI checks required, no force-push: written and ready, waiting on an organization admin token. Until they are applied, Scorecard's Branch-Protection and Code-Review checks score 0 for every repository, and they are right to.",
+  },
+  {
+    title: "Fuzzing",
+    body:
+      "No fuzz targets yet. The parsers that read command output are where they would go first, and they are the same parsers gosec's findings were about.",
+  },
+  {
+    title: "CodeQL",
+    body:
+      "gosec runs in the lint bar and govulncheck in the security job, but no CodeQL analysis runs, which is what Scorecard's SAST check is looking for.",
+  },
+  {
+    title: "Pinned dependencies",
+    body:
+      "The workflows call actions by tag rather than by commit SHA, and the container images the lab builds are not digest-pinned. Scorecard scores that 0 and the score stays where it is until it changes.",
+  },
+];
 
 function mark(value) {
   return value ? "✓" : "✕";
@@ -66,8 +136,8 @@ function mark(value) {
         <p class="lede">
           These are front ends for programs that change a running system. That is
           worth being precise about rather than reassuring about. Here is every
-          promise the family makes, what each one is worth, and the one that is
-          still an open item.
+          promise the family makes, what each one is worth, what the release
+          gate proves, and what is still not done.
         </p>
       </div>
     </section>
@@ -88,6 +158,176 @@ function mark(value) {
       </div>
     </section>
 
+    <section class="section" style="padding-top:0" id="gate">
+      <div class="section-head">
+        <h2>What the gate checks</h2>
+        <span class="chip">every tag, every package</span>
+      </div>
+      <div class="grid">
+        <div class="panel">
+          <h3>Before a tag becomes a release</h3>
+          <p style="font-size:0.93rem;color:color-mix(in srgb, var(--fg) 80%, var(--muted));margin-bottom:0">
+            The <code>security</code> job runs <code>govulncheck</code> over the
+            code the build actually reaches and <code>gitleaks</code> over both
+            the working tree and the whole git history, because a secret
+            committed once stays reachable long after the commit that removed
+            it. <code>gosec</code> runs earlier, inside the lint bar. The
+            release job needs the security job to be green; a red one is a tag
+            without a release.
+          </p>
+        </div>
+        <div class="panel">
+          <h3>What ships beside the binaries</h3>
+          <p style="font-size:0.93rem;color:color-mix(in srgb, var(--fg) 80%, var(--muted));margin-bottom:0">
+            A CycloneDX SBOM per archive, a keyless cosign signature over
+            <code>checksums.txt</code> as a Sigstore bundle, and SLSA build
+            provenance attested for every archive, every package and the
+            checksum file. None of it needs a key to be distributed: both
+            signatures are tied to the workflow identity GitHub issued at build
+            time.
+          </p>
+        </div>
+        <div class="panel">
+          <h3>Before a package enters the repository</h3>
+          <p style="font-size:0.93rem;color:color-mix(in srgb, var(--fg) 80%, var(--muted));margin-bottom:0">
+            <a href="https://pkgs.tui.tools" rel="noopener">pkgs.tui.tools</a>
+            accepts a package only if its sha256 matches the release's
+            <code>checksums.txt</code>, that file carries a valid cosign
+            signature from the tool's own release workflow,
+            <code>gh attestation verify</code> passes on the file itself, and
+            trivy finds no HIGH or CRITICAL vulnerability inside it. Any one
+            failing rejects the package and fails the build; there is no
+            warn-only mode. These are in addition to the repository's GPG
+            signatures, not instead of them: provenance and the scan are about
+            what may go in, the GPG signatures are what your machine checks on
+            the way out.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" style="padding-top:0" id="scorecard">
+      <div class="section-head">
+        <h2>Scorecard</h2>
+        <span class="chip">OpenSSF, weekly</span>
+      </div>
+      <p class="install-note" style="margin-top:0">
+        The score is the aggregate of the 18 checks
+        <a href="https://github.com/ossf/scorecard" rel="noopener">OpenSSF Scorecard</a>
+        runs weekly against each repository, and it is the same number the badge
+        in that repository's README shows. The chips are every check that did
+        not score 10, so what is still open is on this page rather than one
+        click away.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Repository</th>
+              <th scope="col">Badge</th>
+              <th scope="col">Score</th>
+              <th scope="col">Measured</th>
+              <th scope="col">Below 10</th>
+            </tr>
+          </thead>
+          <tbody>
+            {
+              scorecards.map((row) => (
+                <tr>
+                  <td class="mono">
+                    <a href={`https://github.com/tui-tools/${row.repo}`} rel="noopener">
+                      {row.repo}
+                    </a>
+                  </td>
+                  <td>
+                    <a href={row.viewer} rel="noopener">
+                      <img
+                        src={row.badge}
+                        alt={`OpenSSF Scorecard for ${row.repo}`}
+                        height="20"
+                        loading="lazy"
+                        style="display:block;height:20px;width:auto"
+                      />
+                    </a>
+                  </td>
+                  <td class="mono" style={row.published ? "color:var(--family)" : "color:var(--soon)"}>
+                    {row.published ? row.score.toFixed(1) : "pending"}
+                  </td>
+                  <td class="mono" style="color:var(--muted)">{row.measured}</td>
+                  <td>
+                    {row.published ? (
+                      <div class="chips">
+                        {row.open.length === 0 ? (
+                          <span class="chip chip-version">all 18 at 10</span>
+                        ) : (
+                          row.open.map((check) => (
+                            <span
+                              class:list={["chip", check.score < 0 ? "" : "chip-unreleased"]}
+                              title={check.reason ?? undefined}
+                            >
+                              {check.name} {check.score < 0 ? "n/a" : check.score}
+                            </span>
+                          ))
+                        )}
+                      </div>
+                    ) : (
+                      <span style="color:var(--muted);font-size:0.85rem">
+                        the first weekly run has not been indexed yet
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section" style="padding-top:0" id="verify-release">
+      <div class="section-head">
+        <h2>Verify a release yourself</h2>
+        <span class="chip">tui-firewall, as the example</span>
+      </div>
+      <div class="split">
+        <div class="stack">
+          <CommandDialog
+            title="Was this file built by that repository's workflow?"
+            command="gh attestation verify tui-firewall_0.2.2_amd64.deb -R tui-tools/tui-firewall"
+          />
+          <CommandDialog
+            title="Is the checksum list signed by that repository's ci.yml, on a tag?"
+            command={`cosign verify-blob \\
+  --bundle checksums.txt.sigstore.json \\
+  --certificate-identity-regexp \\
+    '^https://github.com/tui-tools/tui-firewall/\\.github/workflows/ci\\.yml@refs/tags/v' \\
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \\
+  checksums.txt`}
+          />
+          <CommandDialog
+            title="Are the bytes you downloaded the ones that list names?"
+            command="sha256sum -c --ignore-missing checksums.txt"
+          />
+        </div>
+        <div class="panel">
+          <h2>Why the regexp is the point</h2>
+          <p style="font-size:0.9rem;color:var(--muted)">
+            The identity regexp says the signature has to come from that
+            repository's <code>ci.yml</code>, running on a tag. Without it,
+            <code>cosign</code> would accept anything signed by anyone. Replace
+            <code>tui-firewall</code> with the tool you are verifying;
+            everything else is identical across the family.
+          </p>
+          <p style="font-size:0.9rem;color:var(--muted);margin-bottom:0">
+            Every asset of every release, with its SHA-256 as parsed from
+            <code>checksums.txt</code> at build time, is also in
+            <a href="/catalog.json">catalog.json</a>, so you can compare before
+            downloading anything.
+          </p>
+        </div>
+      </div>
+    </section>
+
     <section class="section" style="padding-top:0" id="matrix">
       <div class="section-head">
         <h2>Every tool, answered</h2>
@@ -102,7 +342,8 @@ function mark(value) {
               <th scope="col">No daemon</th>
               <th scope="col">No network</th>
               <th scope="col">Static</th>
-              <th scope="col">Signed releases</th>
+              <th scope="col">Signed release</th>
+              <th scope="col">SBOM</th>
             </tr>
           </thead>
           <tbody>
@@ -114,8 +355,15 @@ function mark(value) {
                   <td class="mono" style="color:var(--family)">{mark(row.daemon)}</td>
                   <td class="mono" style="color:var(--family)">{mark(row.network)}</td>
                   <td class="mono" style="color:var(--family)">{mark(row.static)}</td>
-                  <td class="mono" style={row.signed ? "color:var(--family)" : "color:var(--soon)"}>
-                    {mark(row.signed)}
+                  <td
+                    class="mono"
+                    style={row.signed.ok ? "color:var(--family)" : "color:var(--soon)"}
+                    title={row.signed.label}
+                  >
+                    {row.signed.mark}
+                  </td>
+                  <td class="mono" style={row.sbom ? "color:var(--family)" : "color:var(--soon)"}>
+                    {row.released ? mark(row.sbom) : "—"}
                   </td>
                 </tr>
               ))
@@ -124,9 +372,41 @@ function mark(value) {
         </table>
       </div>
       <p class="install-note">
-        The last column is the open item. Releases carry SHA-256 checksums and
-        nothing else, which is stated here rather than left for you to discover.
+        The first four columns come from each tool's <code>tool.json</code>. The
+        last two do not, because those manifests still declare
+        <code>signed_releases: false</code> — they were written before the gate
+        existed and are being corrected tool by tool — so the columns read the
+        latest release itself: a <code>checksums.txt.sigstore.json</code> is the
+        cosign bundle, a <code>.cyclonedx.json</code> per archive is the SBOM.
+        Where the manifest and the release disagree, the release is the fact.
+        <a href="#gate">What the gate checks</a> is how they got there and
+        <a href="#verify-release">verify a release yourself</a> is how you
+        confirm it without taking this page's word for it.
       </p>
+    </section>
+
+    <section class="section" style="padding-top:0" id="not-done">
+      <div class="section-head">
+        <h2>What is not done yet</h2>
+        <span class="chip chip-unreleased">open</span>
+      </div>
+      <p class="install-note" style="margin-top:0">
+        Each of these is one of the checks scoring below 10 in the table above.
+        They are listed here so the score has an explanation on the same page as
+        the number.
+      </p>
+      <div class="grid">
+        {
+          openItems.map((item) => (
+            <div class="panel">
+              <h3>{item.title}</h3>
+              <p style="font-size:0.93rem;color:color-mix(in srgb, var(--fg) 80%, var(--muted));margin-bottom:0">
+                {item.body}
+              </p>
+            </div>
+          ))
+        }
+      </div>
     </section>
 
     <section class="section" style="padding-top:0" id="sudo">
@@ -180,11 +460,10 @@ sha256sum -c checksums.txt --ignore-missing`}
             broken mirror, not a compromised release.
           </p>
           <p style="font-size:0.9rem;color:var(--muted);margin-bottom:0">
-            Signatures are what would close that gap, and they are not in place
-            yet. Until they are, the strongest check available is building from
-            source: the repositories are small, the dependencies are Bubble Tea,
-            Bubbles, Lip Gloss and the kit, and <code>make build</code> is the
-            whole story.
+            Signatures close that gap, and they are in place:
+            <a href="#verify-release">verify a release yourself</a> is the
+            check that answers who built the file, not just whether it arrived
+            intact.
           </p>
         </div>
       </div>
