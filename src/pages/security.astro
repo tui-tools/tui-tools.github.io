@@ -63,14 +63,59 @@ const principles = [
   },
 ];
 
+// The signing column reads the release, not the manifest. Every tool.json in
+// the family still declares `signed_releases: false`, written before the gate
+// existed and updated tool by tool; the assets attached to the latest release
+// are the fact, and a checksums.txt.sigstore.json is what a keyless cosign
+// signature over the release looks like. Where the two disagree the release
+// wins, the same way the install channels wait for a package to exist rather
+// than trusting a manifest that says available.
+function signingState(tool) {
+  const assets = (tool.release?.assets ?? []).map((asset) => asset.name);
+  if (!tool.release) return { mark: "—", label: "no release yet", ok: false };
+  if (assets.some((name) => name.endsWith(".sigstore.json"))) {
+    return { mark: "✓", label: "cosign bundle on checksums.txt", ok: true };
+  }
+  return { mark: "✕", label: "checksums only", ok: false };
+}
+
 const rows = tools.map((tool) => ({
   name: tool.name,
   sudo: tool.security.needs_sudo === false ? "never" : "actions only",
   daemon: tool.security.no_daemon,
   network: tool.security.no_network,
   static: tool.security.static_binary,
-  signed: tool.security.signed_releases,
+  released: Boolean(tool.release),
+  signed: signingState(tool),
+  sbom: (tool.release?.assets ?? []).some((asset) =>
+    asset.name.endsWith(".cyclonedx.json"),
+  ),
 }));
+
+// What the family has not done, said here rather than left to be discovered.
+// Every one of these is a Scorecard check the table above scores below 10.
+const openItems = [
+  {
+    title: "Branch rulesets on main",
+    body:
+      "Pull request required, the two CI checks required, no force-push: written and ready, waiting on an organization admin token. Until they are applied, Scorecard's Branch-Protection and Code-Review checks score 0 for every repository, and they are right to.",
+  },
+  {
+    title: "Fuzzing",
+    body:
+      "No fuzz targets yet. The parsers that read command output are where they would go first, and they are the same parsers gosec's findings were about.",
+  },
+  {
+    title: "CodeQL",
+    body:
+      "gosec runs in the lint bar and govulncheck in the security job, but no CodeQL analysis runs, which is what Scorecard's SAST check is looking for.",
+  },
+  {
+    title: "Pinned dependencies",
+    body:
+      "The workflows call actions by tag rather than by commit SHA, and the container images the lab builds are not digest-pinned. Scorecard scores that 0 and the score stays where it is until it changes.",
+  },
+];
 
 function mark(value) {
   return value ? "✓" : "✕";
@@ -91,8 +136,8 @@ function mark(value) {
         <p class="lede">
           These are front ends for programs that change a running system. That is
           worth being precise about rather than reassuring about. Here is every
-          promise the family makes, what each one is worth, and the one that is
-          still an open item.
+          promise the family makes, what each one is worth, what the release
+          gate proves, and what is still not done.
         </p>
       </div>
     </section>
@@ -297,7 +342,8 @@ function mark(value) {
               <th scope="col">No daemon</th>
               <th scope="col">No network</th>
               <th scope="col">Static</th>
-              <th scope="col">Signed releases</th>
+              <th scope="col">Signed release</th>
+              <th scope="col">SBOM</th>
             </tr>
           </thead>
           <tbody>
@@ -309,8 +355,15 @@ function mark(value) {
                   <td class="mono" style="color:var(--family)">{mark(row.daemon)}</td>
                   <td class="mono" style="color:var(--family)">{mark(row.network)}</td>
                   <td class="mono" style="color:var(--family)">{mark(row.static)}</td>
-                  <td class="mono" style={row.signed ? "color:var(--family)" : "color:var(--soon)"}>
-                    {mark(row.signed)}
+                  <td
+                    class="mono"
+                    style={row.signed.ok ? "color:var(--family)" : "color:var(--soon)"}
+                    title={row.signed.label}
+                  >
+                    {row.signed.mark}
+                  </td>
+                  <td class="mono" style={row.sbom ? "color:var(--family)" : "color:var(--soon)"}>
+                    {row.released ? mark(row.sbom) : "—"}
                   </td>
                 </tr>
               ))
@@ -319,12 +372,41 @@ function mark(value) {
         </table>
       </div>
       <p class="install-note">
-        The last column is what each tool.json still declares, and it is behind
-        the facts: releases now carry cosign signatures and build provenance,
-        as <a href="#gate">the gate</a> above describes. The manifests are
-        updated tool by tool, and this column follows them rather than
-        anticipating them.
+        The first four columns come from each tool's <code>tool.json</code>. The
+        last two do not, because those manifests still declare
+        <code>signed_releases: false</code> — they were written before the gate
+        existed and are being corrected tool by tool — so the columns read the
+        latest release itself: a <code>checksums.txt.sigstore.json</code> is the
+        cosign bundle, a <code>.cyclonedx.json</code> per archive is the SBOM.
+        Where the manifest and the release disagree, the release is the fact.
+        <a href="#gate">What the gate checks</a> is how they got there and
+        <a href="#verify-release">verify a release yourself</a> is how you
+        confirm it without taking this page's word for it.
       </p>
+    </section>
+
+    <section class="section" style="padding-top:0" id="not-done">
+      <div class="section-head">
+        <h2>What is not done yet</h2>
+        <span class="chip chip-unreleased">open</span>
+      </div>
+      <p class="install-note" style="margin-top:0">
+        Each of these is one of the checks scoring below 10 in the table above.
+        They are listed here so the score has an explanation on the same page as
+        the number.
+      </p>
+      <div class="grid">
+        {
+          openItems.map((item) => (
+            <div class="panel">
+              <h3>{item.title}</h3>
+              <p style="font-size:0.93rem;color:color-mix(in srgb, var(--fg) 80%, var(--muted));margin-bottom:0">
+                {item.body}
+              </p>
+            </div>
+          ))
+        }
+      </div>
     </section>
 
     <section class="section" style="padding-top:0" id="sudo">

@@ -35,6 +35,31 @@ function formatDate(iso) {
   return new Date(iso).toISOString().slice(0, 10);
 }
 
+const signedRelease = (() => {
+  const assets = (tool.release?.assets ?? []).map((asset) => asset.name);
+  if (!tool.release) {
+    return {
+      state: "info",
+      label: "No release yet",
+      detail: "Nothing has shipped, so there is nothing to verify. Build from source in the meantime.",
+    };
+  }
+  if (assets.some((name) => name.endsWith(".sigstore.json"))) {
+    return {
+      state: "yes",
+      label: "Signed release, with provenance",
+      detail:
+        "checksums.txt carries a keyless cosign signature from this repository's release workflow, every archive has a CycloneDX SBOM, and every archive, package and the checksum file carry SLSA build provenance. The security page shows the three commands that check it.",
+    };
+  }
+  return {
+    state: "no",
+    label: "This release is not signed",
+    detail:
+      "It predates the signing gate: it carries SHA-256 checksums and nothing else. Verify the checksum, and prefer a newer release once there is one.",
+  };
+})();
+
 // The security block, turned into the checklist a reader scans. "yes" is the
 // answer that costs them nothing; "no" is shown just as plainly.
 const checks = [
@@ -73,13 +98,10 @@ const checks = [
       ? "Released statically linked, with no runtime dependencies to install."
       : "The release needs runtime libraries present on the machine.",
   },
-  {
-    state: security.signed_releases ? "yes" : "no",
-    label: security.signed_releases ? "Signed releases" : "Releases are not signed yet",
-    detail: security.signed_releases
-      ? "Release artifacts carry a signature you can verify."
-      : "Releases carry SHA-256 checksums but no signature. Verify the checksum, and read this as the open item it is.",
-  },
+  // Read from the release, not from the manifest: every tool.json still says
+  // signed_releases: false, written before the release gate existed. The
+  // assets are the fact — checksums.txt.sigstore.json is the cosign bundle.
+  signedRelease,
 ];
 ---
 

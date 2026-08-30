@@ -317,6 +317,14 @@ hr {
   grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
 }
 
+.footer-note {
+  margin: 0.6rem 0 0;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--muted);
+  max-width: 32ch;
+}
+
 .footer h3 {
   font-size: 0.75rem;
   letter-spacing: 0.14em;
