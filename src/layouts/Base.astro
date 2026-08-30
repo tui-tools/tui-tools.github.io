@@ -2,6 +2,8 @@
 // The one page shell. `accent` switches the page between the family's green
 // and a tool's blue, which is the same rule the branding uses: green is what
 // every tool shares, blue is what one tool adds.
+import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import "../styles/global.css";
 import Masthead from "../components/Masthead.astro";
 import Footer from "../components/Footer.astro";
@@ -23,7 +25,17 @@ const canonical = new URL(Astro.url.pathname, Astro.site ?? "https://tui-tools.g
 
 // Absolute, because every scraper that reads these — X, Slack, LinkedIn —
 // treats a relative og:image as a reason to show nothing.
+// The query string carries a hash of the card's bytes: scrapers cache a preview
+// by the image URL, so a redrawn card would otherwise keep showing the old one
+// until their cache expired. A missing card (built before its PNG exists) gets
+// no version, which is also what the fallback to the family card does.
 const ogImage = new URL(`/og/${ogSlug}.png`, canonical);
+try {
+  const bytes = readFileSync(new URL(`../../public/og/${ogSlug}.png`, import.meta.url));
+  ogImage.searchParams.set("v", createHash("sha256").update(bytes).digest("hex").slice(0, 10));
+} catch {
+  // No card on disk: leave the URL unversioned.
+}
 ---
 
 <!doctype html>
