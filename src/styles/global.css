@@ -270,6 +270,54 @@ hr {
   box-shadow: inset 0 -2px 0 var(--accent);
 }
 
+/* The site-wide beta notice, under the masthead on every page. No JavaScript
+   and no dismiss control: it is a fact about the family, not a message the
+   reader has already read. `--soon` is the palette's warning tone, the same one
+   the "coming soon" dialogs and the beta chips use. */
+.beta-banner {
+  background: color-mix(in srgb, var(--soon) 12%, var(--ink));
+  border-bottom: 1px solid color-mix(in srgb, var(--soon) 35%, var(--frame));
+}
+
+.beta-banner-inner {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.6rem;
+  padding-block: 0.5rem;
+  margin-bottom: 0;
+  font-size: 0.84rem;
+  line-height: 1.45;
+  color: color-mix(in srgb, var(--fg) 80%, var(--soon));
+}
+
+.beta-banner-tag {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--soon);
+  flex: none;
+}
+
+.beta-banner-inner a {
+  color: var(--soon);
+  text-decoration-color: color-mix(in srgb, var(--soon) 50%, transparent);
+  text-underline-offset: 0.2em;
+  white-space: nowrap;
+}
+
+/* On a phone the line is three rows of text already; the tag sits on its own
+   row above it rather than stealing width from the sentence. */
+@media (max-width: 33.999rem) {
+  .beta-banner-inner {
+    font-size: 0.8rem;
+    padding-block: 0.45rem;
+    gap: 0.2rem 0.5rem;
+  }
+}
+
 /* On a phone the five links do not fit beside the brand, and letting them wrap
    drops a single link onto a second row. Below 34rem the nav takes a row of its
    own under the brand and scrolls sideways instead of wrapping — no hamburger,
@@ -512,6 +560,27 @@ hr {
   color: color-mix(in srgb, var(--fg) 62%, var(--muted));
 }
 
+/* The beta caveats on the install page: a panel in the warning tone, so it
+   reads as a condition of installing rather than as one more section. */
+.panel-beta {
+  border-color: color-mix(in srgb, var(--soon) 40%, var(--frame));
+  background: color-mix(in srgb, var(--soon) 7%, var(--panel));
+}
+
+.beta-notes {
+  margin: 0 0 1rem;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.6rem;
+  font-size: 0.92rem;
+  color: var(--muted);
+  max-width: var(--measure);
+}
+
+.beta-notes code {
+  color: var(--fg);
+}
+
 /* ---------------------------------------------------------------- badges */
 
 .chip {
@@ -549,6 +618,14 @@ hr {
   border-color: color-mix(in srgb, var(--soon) 40%, var(--frame));
 }
 
+/* The family is in beta, so every version shown anywhere is followed by this.
+   It borrows the same warning tone as the banner rather than inventing one. */
+.chip-beta {
+  color: var(--soon);
+  border-color: color-mix(in srgb, var(--soon) 40%, var(--frame));
+  background: color-mix(in srgb, var(--soon) 10%, var(--panel-raised));
+}
+
 .chips {
   display: flex;
   flex-wrap: wrap;
@@ -583,6 +660,13 @@ hr {
   align-items: center;
   gap: 0.75rem;
   padding: 1rem 1.1rem 0.75rem;
+}
+
+.card-version {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 
 .card-head img {

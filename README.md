@@ -103,6 +103,25 @@ whole mechanism is documented in
 only the running binary needs — `versionRegex` and `searchPaths` — since the
 probe is the tool's business, not the website's.
 
+## The beta notice
+
+The canonical sentence is:
+
+> Beta: the family is days old and still changing. Package names, flags and
+> keys may move without notice until 1.0. Pin versions, and report what breaks.
+
+The tool READMEs carry it word for word, so it is changed everywhere at once or
+nowhere. The site says it in four places: the banner under
+the masthead on every page (`src/components/BetaBanner.astro`, rendered by
+`src/layouts/Base.astro`), the **Before you install** panel on the install page
+(`#beta`), the `beta` chip beside every version
+(`src/components/VersionChip.astro`, used by the grid card and the tool page),
+and the `family` block in `/catalog.json`
+(`src/pages/catalog.json.js`). Removing them is a deliberate 1.0 decision, made
+once for all four together, not a cleanup: until it is made, they are the only
+thing telling a reader that a package name or a key binding can move under
+them.
+
 ## Adding a tool to the site
 
 There is no step in this repository.

@@ -7,6 +7,7 @@ import { createHash } from "node:crypto";
 import { join } from "node:path";
 import "../styles/global.css";
 import Masthead from "../components/Masthead.astro";
+import BetaBanner from "../components/BetaBanner.astro";
 import Footer from "../components/Footer.astro";
 
 const {
@@ -85,6 +86,7 @@ try {
   <body>
     <a class="skip" href="#main">Skip to content</a>
     <Masthead section={section} />
+    <BetaBanner />
     <main id="main">
       <slot />
     </main>
