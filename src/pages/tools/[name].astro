@@ -376,18 +376,63 @@ const checks = [
               <div class="soon-banner">
                 <span aria-hidden="true">!</span>
                 <p>
-                  Not published yet. The command is what it will be once the
-                  package repository at <code>pkgs.tui.tools</code> is live. Until
-                  then, use the static binary or build from source.
+                  {entry.packaged ? (
+                    <>
+                      The packages exist — this release ships them — but the
+                      repository at <code>pkgs.tui.tools</code> is not serving
+                      yet. This page turns the commands on by itself the day it
+                      does. Until then, use the static binary or build from
+                      source.
+                    </>
+                  ) : (
+                    <>
+                      Not published yet. The command is what it will be once the
+                      package repository at <code>pkgs.tui.tools</code> is live.
+                      Until then, use the static binary or build from source.
+                    </>
+                  )}
                 </p>
               </div>
             )}
 
-            {entry.requiresRepoSetup && (
+            {entry.requiresRepoSetup && !entry.setup && (
               <p class="install-note" style="margin:0 0 0.9rem">
                 Needs the tui-tools repository, a{" "}
                 <a href="/install/">one-time setup</a> you do once per machine.
               </p>
+            )}
+
+            {entry.setup && (
+              <div class="stack" style="--flow:0.9rem;margin-bottom:1.25rem">
+                <p class="install-note" style="margin:0">
+                  Once per machine, then every tool in the family is one{" "}
+                  <code>{entry.manager}</code> away.
+                </p>
+                <CommandDialog
+                  title="Add the repository"
+                  command={entry.setup.oneLiner}
+                  tool={tool.name}
+                  manager={`${entry.id}-setup`}
+                  soon={!entry.available}
+                />
+                <details class="manual-setup">
+                  <summary>
+                    Or run the same thing yourself, one command at a time
+                  </summary>
+                  <p class="install-note">
+                    A family whose whole promise is <em>preview before you
+                    run</em> is not going to insist you pipe a script into a
+                    shell. These are the commands that script runs.
+                  </p>
+                  <CommandDialog
+                    title="The one-time setup, by hand"
+                    command={entry.setup.manual}
+                    tool={tool.name}
+                    manager={`${entry.id}-manual`}
+                    soon={!entry.available}
+                  />
+                </details>
+              </div>
             )}
 
             <div class="stack" style="--flow:0.9rem">

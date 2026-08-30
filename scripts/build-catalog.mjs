@@ -33,7 +33,42 @@ const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? "";
 const ARCHES = ["amd64", "arm64"];
 
 /** Repositories that are never tools, whatever they carry. */
-const NEVER_A_TOOL = new Set([".github", `${ORG}.github.io`]);
+const NEVER_A_TOOL = new Set([".github", `${ORG}.github.io`, "pkgs"]);
+
+/**
+ * Which release asset proves a channel can be installed from the family
+ * package repository. A manifest saying `available` is an intention; a .deb
+ * attached to the release is the fact, and the site waits for the fact.
+ */
+const PACKAGE_SUFFIX = {
+  apt: ".deb",
+  dnf: ".rpm",
+  pacman: ".pkg.tar.zst",
+};
+
+/**
+ * The one-time repository setup, by hand, per package manager. Deliberately
+ * the same commands tui-kit's render-install.py writes into every README: a
+ * reader who compares the two has to find them identical.
+ */
+const MANUAL_SETUP = {
+  apt: (repo) => `sudo install -d -m 0755 /etc/apt/keyrings
+curl -fsSL ${repo}/pubkey.asc \\
+  | sudo gpg --dearmor -o /etc/apt/keyrings/tui-tools.gpg
+echo "deb [signed-by=/etc/apt/keyrings/tui-tools.gpg] ${repo}/deb stable main" \\
+  | sudo tee /etc/apt/sources.list.d/tui-tools.list
+sudo apt update`,
+  dnf: (repo) => `sudo rpm --import ${repo}/pubkey.asc
+sudo curl -fsSL -o /etc/yum.repos.d/tui-tools.repo ${repo}/rpm/tui-tools.repo
+sudo dnf makecache`,
+  pacman: (repo) => `curl -fsSL -o /tmp/tui-tools.asc ${repo}/pubkey.asc
+sudo pacman-key --add /tmp/tui-tools.asc
+sudo pacman-key --lsign-key \\
+  "$(gpg --show-keys --with-colons /tmp/tui-tools.asc | awk -F: '/^fpr:/{print $10; exit}')"
+printf '[tui-tools]\\nServer = ${repo}/arch/$arch\\n' \\
+  | sudo tee -a /etc/pacman.conf
+sudo pacman -Sy`,
+};
 
 function headers(accept = "application/vnd.github+json") {
   const h = {
@@ -176,10 +211,46 @@ function expand(text, version, arch) {
 }
 
 /**
+ * Is the family package repository actually serving?
+ *
+ * The manifests declare the distro channels with `available: false`, because
+ * saying otherwise while nothing answers at pkgs.tui.tools would be a lie the
+ * reader finds out about at the shell prompt. So the site asks, once per
+ * build, with a HEAD. If it answers, the channels whose packages exist are
+ * promoted to available; if it does not answer — not deployed yet, offline
+ * build, a slow day — the page falls back to coming soon, which is what it
+ * says today anyway. There is no wrong answer to fall back to.
+ *
+ * TUI_PKGS_LIVE=true or =false skips the probe, for a build that has to be
+ * deterministic.
+ */
+async function probePackageRepo(url) {
+  const forced = process.env.TUI_PKGS_LIVE;
+  if (forced === "true" || forced === "false") {
+    console.log(`  package repository: ${forced} (TUI_PKGS_LIVE)`);
+    return forced === "true";
+  }
+  if (!url) return false;
+  try {
+    const response = await fetch(`${url}/install.sh`, {
+      method: "HEAD",
+      redirect: "follow",
+      signal: AbortSignal.timeout(8000),
+    });
+    const live = response.ok;
+    console.log(`  package repository: ${url} → ${response.status}`);
+    return live;
+  } catch (error) {
+    console.log(`  package repository: ${url} is not answering (${error.name})`);
+    return false;
+  }
+}
+
+/**
  * Turn the manifest's install block into what the page renders: one entry per
  * package manager, in display order, with the commands already expanded.
  */
-function buildInstall(manifest, release) {
+function buildInstall(manifest, release, pkgsLive) {
   const order = [
     ["pacman", "Arch Linux", "pacman"],
     ["aur", "Arch Linux (AUR)", "AUR helper"],
@@ -190,16 +261,40 @@ function buildInstall(manifest, release) {
     ["source", "From source", "go build"],
   ];
   const version = release?.version ?? null;
+  const repoUrl = manifest.install?.repo_url ?? null;
+  const assetNames = (release?.assets ?? []).map((asset) => asset.name);
 
   const entries = [];
   for (const [id, label, manager] of order) {
     const method = manifest.install?.[id];
     if (!method) continue;
+
+    // A distro channel becomes installable when three things are true at once:
+    // the manifest declares it, this release actually attached that kind of
+    // package, and the repository serving it answers. Any one missing and the
+    // channel stays coming soon, with the command still shown.
+    const suffix = PACKAGE_SUFFIX[id];
+    const packaged =
+      suffix !== undefined && assetNames.some((name) => name.endsWith(suffix));
+    const available =
+      method.available === true || (pkgsLive && packaged && Boolean(repoUrl));
+
+    const setup =
+      repoUrl && method.requires_repo_setup === true && MANUAL_SETUP[id]
+        ? {
+            oneLiner: `curl -fsSL ${repoUrl}/install.sh | sh`,
+            manual: MANUAL_SETUP[id](repoUrl),
+            repoUrl,
+          }
+        : null;
+
     entries.push({
       id,
       label,
       manager,
-      available: method.available === true,
+      available,
+      packaged,
+      setup,
       package: method.package ?? manifest.name,
       repo: method.repo ?? null,
       requiresRepoSetup: method.requires_repo_setup === true,
@@ -260,7 +355,7 @@ function headlineInstall(entries) {
   };
 }
 
-async function buildTool(repo) {
+async function buildTool(repo, pkgsLive) {
   const response = await rawFile(repo, "tool.json");
   if (!response) return null;
 
@@ -284,7 +379,7 @@ async function buildTool(repo) {
     if (src) screenshots.push({ src, caption: shot.caption });
   }
 
-  const install = buildInstall(manifest, release);
+  const install = buildInstall(manifest, release, pkgsLive);
 
   return {
     name: manifest.name,
@@ -326,9 +421,14 @@ async function main() {
   const repos = await listRepos();
   console.log(`  ${repos.length} repositories to check`);
 
+  // Asked once, before any tool is built, so every tool in one catalog agrees
+  // about whether the package repository exists.
+  const pkgsUrl = process.env.TUI_PKGS_URL ?? "https://pkgs.tui.tools";
+  const pkgsLive = await probePackageRepo(pkgsUrl);
+
   const tools = [];
   for (const repo of repos) {
-    const tool = await buildTool(repo);
+    const tool = await buildTool(repo, pkgsLive);
     if (tool) tools.push(tool);
   }
 
@@ -342,6 +442,7 @@ async function main() {
   const catalog = {
     generatedAt: new Date().toISOString(),
     org: ORG,
+    pkgs: { url: pkgsUrl, live: pkgsLive },
     tools,
     categories: [...new Set(tools.map((tool) => tool.category))].sort(),
   };

@@ -187,6 +187,24 @@ Two build arguments:
 | `SITE_URL` | `https://tui.tools` | The canonical host. Feeds `site`, and through it every canonical link, the sitemap and `robots.txt`. |
 | `GITHUB_TOKEN` | empty | Lifts the GitHub API rate limit for the catalog step. |
 
+Two environment variables reach the catalog step as well, both about the
+package repository:
+
+| Variable | Default | Why |
+| --- | --- | --- |
+| `TUI_PKGS_URL` | `https://pkgs.tui.tools` | Where the family's apt, dnf and pacman repository lives. |
+| `TUI_PKGS_LIVE` | unset | `true` or `false` skips the probe below and forces the answer, for a build that has to be deterministic. |
+
+The distro channels are declared in every tool's `tool.json` with
+`"available": false`, because saying otherwise while nothing answers at
+`pkgs.tui.tools` would be a lie a reader discovers at their own shell prompt.
+So the catalog step sends one `HEAD` to `TUI_PKGS_URL/install.sh` per build.
+If it answers, the channels whose packages that release actually carries are
+promoted to available and the install pages turn the commands on. If it does
+not answer — not deployed, offline build, a slow day — the pages stay on
+*coming soon*, which is what they say anyway. There is no wrong answer to
+fall back to, and no file to edit on the day the repository goes up.
+
 `GITHUB_TOKEN` is worth spelling out. Without it the catalog script uses the
 anonymous GitHub API, capped at **60 requests per hour per IP** and shared with
 every other anonymous caller behind the same address. One catalog run costs
@@ -230,53 +248,143 @@ rather than only on push, and a container host has the same problem without the
 same answer — nothing in its git history changed, so nothing tells it to
 rebuild.
 
-`publish.yml` has a `redeploy` job for that. It is **skipped** unless the
-repository variable `QUAVE_REDEPLOY_URL` is set, so it costs nothing today. When
-set, it `POST`s to Quave ONE's documented build endpoint after every successful
-site build — the hourly one included — with `forceNewBuild: true`, which is what
-makes the platform rebuild despite seeing identical source.
+`publish.yml` has a `ship` job for that. Quave ONE pulls from GitHub only where
+its GitHub App is installed, and it is not installed on this organization, so
+the job pushes instead: the documented three-step **Code API** — ask for a
+pre-signed URL, `PUT` the source tarball, say it landed — and the third step
+triggers the build. The image builds the catalog itself, so a build is a fresh
+site.
+
+That leaves one wrinkle. The platform reuses the image it already built when the
+source is unchanged, which is right in general and wrong here: every hourly run
+sends identical source while the *content* has moved on. So the tarball carries
+a `.build-stamp` file holding the SHA-256 of the catalog that run built. Nothing
+changed upstream, same stamp, same source, image reused and no build minutes
+spent; a release shipped, the catalog changes, and the stamp changes the source
+and the Dockerfile's `COPY . .` layer with it.
+
+The job is **skipped** unless the repository variable `QUAVE_ENV_NAME` is set:
 
 ```sh
-gh variable set QUAVE_REDEPLOY_URL --body https://api.quave.cloud/api/public/v1/app-env/build
-gh variable set QUAVE_ENV_NAME     --body tui-tools-tui-tools-site-production
-gh secret   set QUAVE_API_TOKEN    # an app-environment token, or a user token
+gh variable set QUAVE_ENV_NAME  --body tui-tools-tui-site-production
+gh secret   set QUAVE_API_TOKEN                  # the app-environment token
 ```
 
-Set `QUAVE_REDEPLOY_URL` without the other two and the job fails loudly rather
-than leaving a site that quietly stops updating.
+Set `QUAVE_ENV_NAME` without the secret and the job fails loudly rather than
+leaving a site that quietly stops updating. `QUAVE_API_URL` is optional and
+defaults to `https://api.quave.cloud/api/public/v1`.
+
+The token is the **app-environment** token, not a user token: it can deploy this
+one environment and nothing else. Read it from the environment's page on Quave
+ONE, or rotate it there if it ever leaks.
+
+### If the GitHub App is ever installed
+
+Installing the Quave ONE GitHub App on the `tui-tools` organization would let
+the platform pull `main` on push and drop the upload half of the `ship` job. It
+would **not** replace it: a push is the trigger that this site does not have —
+the hourly rebuild is the point — so the job would still have to run, just with
+`forceNewBuild` against the build endpoint instead of a tarball. The upload flow
+costs one extra minute per run and needs no click, which is why it is what is
+wired today.
 
 ### Cutover to Quave ONE (owner action)
 
-In order. Steps 1–4 leave Pages serving as it does now, so each one is
-reversible until the DNS change in step 5.
+Steps 1–4 are **done**. They left Pages serving as it always did, which is the
+point: everything up to the DNS change is reversible, and the DNS change is the
+owner's.
 
-1. **Create the app** on Quave ONE from `tui-tools/tui-tools.github.io`,
-   branch `main`, Docker preset **CUSTOM** with the `Dockerfile` at the
-   repository root. Set the environment's **port to 3000**, health check path
-   to `/healthz`, and SSL on.
-2. **Set the build variables** on that environment (`Env Vars` tab, *Used for:
-   Build*): `SITE_URL=https://tui.tools` and `GITHUB_TOKEN=<read-only token>`.
-   The token matters — see the rate-limit note above. Deploy once and check
-   `https://<env>.svc-<region>.zcloud.ws/` serves the grid, `/sitemap-index.xml`
-   carries `https://tui.tools/…`, and `/robots.txt` points at it.
-3. **Turn on the rebuild signal**: the two variables and the secret above. The
-   next hourly `publish` run should show the `redeploy` job green.
-4. **Add the host** `tui.tools` to the Quave ONE environment and read back the
-   CNAME target it gives you. Nothing resolves yet.
-5. **Point DNS**: `CNAME tui.tools → <the Quave ONE target>`. If `tui.tools` is
-   an apex domain and the registrar has no ALIAS/ANAME support, host the site at
-   `www.tui.tools` and redirect the apex. Wait for the certificate to issue.
-6. **Set `SITE_DOMAIN`** to `tui.tools` so the Pages build also renders the new
-   canonical host — for the window in which both are up, they agree.
-7. **Retire Pages** once Quave ONE has served the domain for a few days without
-   incident: delete the `deploy` job (and the `pages`/`id-token` permissions and
-   the `write CNAME` step) from `publish.yml`, leaving `build` as the check that
-   the site still compiles and `redeploy` as the thing that ships it. Then turn
-   Pages off in the repository settings.
+1. ~~**Create the app**~~ — `tui-site` on the `tui-tools` account, CUSTOM preset
+   with the root `Dockerfile`, port 3000, health check `/healthz`, SSL on, one
+   zCloud, region `us-5` (where the analytics already live). It deploys by
+   source upload rather than from GitHub, because that needed no click; see
+   above.
+2. ~~**Set the build variable**~~ — `SITE_URL=https://tui.tools`, marked
+   *Build*. `GITHUB_TOKEN` is **not** set and now has to be; see
+   [The build token](#the-build-token-owner-action) below, which is the one
+   thing still standing between this and a site that updates itself.
+3. ~~**Turn on the rebuild signal**~~ — `QUAVE_ENV_NAME` and `QUAVE_API_TOKEN`
+   are set, and the `ship` job runs on every `publish`.
+4. ~~**Add the hosts**~~ — `tui.tools` and `www.tui.tools` on the site
+   environment, `analytics.tui.tools` on the Umami one.
+5. ~~**Point DNS**~~ — done in Cloudflare, and all three names are `VALID` with
+   Let's Encrypt certificates issued. The records:
 
-The one thing to *not* do out of order is step 5 before step 4: DNS pointing at
-a host that has not been told to answer for the domain is a hard outage, whereas
-every other step is inert until the one after it.
+   | Type | Name | Value |
+   | --- | --- | --- |
+   | `CNAME`, flattened | `tui.tools` | `tui-tools-tui-site-production.zcloud.services` |
+   | `CNAME` | `www.tui.tools` | `tui-tools-tui-site-production.zcloud.services` |
+   | `CNAME` | `analytics.tui.tools` | `tui-tools-tui-analytics-production.zcloud.services` |
+
+   The apex is the interesting one. `tui.tools` cannot hold a plain `CNAME` —
+   no apex can — so it relies on Cloudflare's CNAME flattening, which resolves
+   the target and answers with `A` records. An `ALIAS`/`ANAME` record does the
+   same thing at registrars that offer it; one that offers neither cannot serve
+   an apex from a container host at all, and the answer there is to host at
+   `www.tui.tools` and redirect the apex to it.
+
+   The records are DNS-only, not proxied. Proxying them through Cloudflare would
+   work but needs an Origin CA certificate on the Quave ONE side; see the
+   platform's *Cloudflare as a proxy* guide before turning the orange cloud on.
+6. ~~**Set `SITE_DOMAIN`**~~ — already `tui.tools`, so the Pages build renders
+   the same canonical host the container does. For the overlap in which both are
+   up, they agree.
+7. **Keep Pages**, which is a change of plan and worth the paragraph. The
+   original step here was to delete the `deploy` job once Quave ONE had proven
+   itself. Do not: `tui-tools.github.io` is the URL every existing link and
+   bookmark uses, and the redirect from it to `tui.tools` is something GitHub
+   does *only while Pages is enabled with the custom domain set*. Turn Pages off
+   and those links 404 rather than arriving. So Pages stays, its job now being
+   to serve one redirect, and `dist/CNAME` — written by the `write CNAME` step
+   from the `SITE_DOMAIN` variable — is what tells it where to send them.
+
+   `www.tui.tools` is the other half of the same idea and is handled in the
+   image instead: `nginx.conf` answers that name with a 301 to the apex,
+   preserving the path. Two hosts serving identical HTML is a duplicate a
+   crawler has to resolve on its own; a redirect resolves it first.
+
+Two loose ends beyond the token:
+
+- The Umami tag in `src/layouts/Base.astro` now points at
+  `https://analytics.tui.tools/script.js`, which ships with the next successful
+  build. Change the website's domain inside Umami to match, so the numbers keep
+  accruing to the same site rather than starting a new one.
+- The analytics environment also carries a host `analytic.tui.tools` — singular,
+  a typo, with no DNS behind it. It will sit invalid until the platform
+  auto-disables it. Remove it from the Hosts tab.
+
+### The build token (owner action)
+
+The container build needs a GitHub token, and this is no longer theoretical. The
+first build squeaked under the anonymous limit; the second, minutes later, died
+at the sixteenth of seventeen repositories:
+
+```
+GET https://api.github.com/repos/tui-tools/tui-samba/releases/latest → 403
+API rate limit exceeded for 88.198.69.252.
+```
+
+That address is the platform's build node, shared with every other tenant
+building on it, and the site's own catalog run costs about fifty requests
+against a budget of sixty an hour. An hourly rebuild cannot fit in that, and a
+rate-limited build **fails** rather than shipping something stale — the catalog
+script's fallback is "keep what is on disk", and a fresh container has nothing.
+So until the token exists, the environment keeps serving the last image that
+built and stops picking up releases.
+
+Create a **fine-grained personal access token**:
+
+- **Resource owner**: the `tui-tools` organization (or your own account —
+  everything it reads is public).
+- **Repository access**: *Public repositories (read-only)*.
+- **Permissions**: none beyond the default `Metadata: Read`. It reads public
+  repository contents and releases, which needs no grant.
+- **Expiry**: as long as you are willing to rotate.
+
+Then set it on the environment as `GITHUB_TOKEN`, *Used for: Build*. The next
+`publish` run picks it up. Nothing in this repository needs the token: it is a
+Quave ONE environment variable, and the Actions build has the runner's own
+token with a far higher limit.
 
 ## Local development
 
