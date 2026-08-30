@@ -40,7 +40,14 @@ ARG GITHUB_TOKEN=""
 # moves domains: canonical links, sitemap and robots.txt all come from it.
 ARG SITE_URL="https://tui.tools"
 
-RUN npm run catalog && npx astro build
+# The same three commands the publish workflow runs, in the same order: the
+# catalog first, then the 1200x630 link previews drawn from it, then Astro.
+#
+# The previews are rendered by satori and @resvg/resvg-js. resvg is a native
+# addon, and it publishes musl builds for linux x64 and arm64, so npm ci above
+# resolves a working binary on this alpine stage without a toolchain — which is
+# why the base image does not need to change.
+RUN npm run catalog && npm run og && npx astro build
 
 FROM nginx:1.29-alpine AS runtime
 

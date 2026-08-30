@@ -56,6 +56,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run catalog
 
+      # After the catalog, because the tool cards embed the screenshots it has
+      # just downloaded into public/tools/, and before astro, because Astro
+      # copies public/ into dist/ as it renders.
+      - name: draw the link previews
+        run: npm run og
+
       - name: build the site
         env:
           SITE_URL: ${{ vars.SITE_DOMAIN != '' && format('https://{0}', vars.SITE_DOMAIN) || 'https://tui-tools.github.io' }}

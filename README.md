@@ -14,8 +14,8 @@ a tool, change a version, or update a screenshot.
 
 ```
 tui-tools/<tool>/tool.json  ─┐
-GitHub releases API         ─┼─► scripts/build-catalog.mjs ─► src/data/catalog.json ─► astro build ─► Pages
-icons and screenshots       ─┘
+GitHub releases API         ─┼─► scripts/build-catalog.mjs ─► src/data/catalog.json ─┬─► scripts/build-og.mjs ─► public/og/*.png ─┐
+icons and screenshots       ─┘                                                     └───────────────── astro build ─────────────────┴─► Pages
 ```
 
 `scripts/build-catalog.mjs` lists the public repositories in the organization
@@ -40,6 +40,31 @@ The schema those manifests are validated against lives in the kit:
 [`tui-kit/schema/tool.schema.json`](https://github.com/tui-tools/tui-kit/blob/main/schema/tool.schema.json),
 documented in
 [`tui-kit/docs/tool-manifest.md`](https://github.com/tui-tools/tui-kit/blob/main/docs/tool-manifest.md).
+
+### Link previews
+
+A link to this site is mostly shared into somewhere that draws a card — X,
+Slack, LinkedIn, Discord — and that card is the first look most people get.
+`scripts/build-og.mjs` draws one per page, 1200×630, into `public/og/<slug>.png`
+between the catalog and `astro build`:
+
+- `home`, `install`, `security` and `kit` get the **family card**: the brand
+  mark, the wordmark, the page's own line, and the domain.
+- every tool gets a **tool card**: `>_ tui-<name>`, the tagline out of its
+  `tool.json`, and its first screenshot fitted on the right. The screenshot is
+  already on disk — the catalog downloaded it a step earlier — so nothing is
+  fetched here, and a tool whose manifest has no screenshot falls back to its
+  icon.
+
+`Base.astro` takes an `ogSlug` prop and points `og:image` at the matching file,
+absolute, with `twitter:card = summary_large_image`. A page that names no slug
+gets the family card, which is what 404 does.
+
+satori renders the layout to SVG and `@resvg/resvg-js` rasterises it; both are
+plain npm packages with prebuilt musl binaries, so the `node:22-alpine` build
+stage needs nothing installed. The two typefaces come from `@fontsource/*` in
+`node_modules`, not from a font CDN, so a build with no network still draws the
+same bytes.
 
 ### Backend compatibility
 
@@ -385,13 +410,16 @@ fails while a `catalog.json` is already on disk, the script keeps the old one
 and exits successfully, so a rate limit or a dropped connection cannot leave you
 without a site to build.
 
-`src/data/catalog.json` and `public/tools/` are generated and gitignored.
+`src/data/catalog.json`, `public/tools/` and `public/og/` are generated and
+gitignored. `npm run og` redraws the previews on their own, against the catalog
+already on disk.
 
 ## What is in here
 
 | Path | What it is |
 | --- | --- |
 | `scripts/build-catalog.mjs` | The whole data layer: org → manifests → releases → images → `catalog.json` |
+| `scripts/build-og.mjs` | The 1200×630 link preview each page points `og:image` at |
 | `src/pages/index.astro` | The marketplace grid, with a category filter |
 | `src/pages/tools/[name].astro` | A tool: gallery, description, keys, compatibility, install picker, security, downloads, releases |
 | `src/pages/install.astro` | Family-level install: the repository setup per package manager, and how to verify a download |

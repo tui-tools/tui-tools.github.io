@@ -11,11 +11,19 @@ const {
   description,
   accent = "family",
   section = "",
-  ogImage = "/brand/icon-256.png",
+  // The link preview, by name rather than by path: scripts/build-og.mjs draws
+  // one 1200x630 card per page into public/og/, and a page only has to say
+  // which. Anything without a card of its own falls back to the family one,
+  // which is true of 404 and of any page added before its card exists.
+  ogSlug = "home",
 } = Astro.props;
 
 const fullTitle = title === "tui-tools" ? title : `${title} · tui-tools`;
 const canonical = new URL(Astro.url.pathname, Astro.site ?? "https://tui-tools.github.io");
+
+// Absolute, because every scraper that reads these — X, Slack, LinkedIn —
+// treats a relative og:image as a reason to show nothing.
+const ogImage = new URL(`/og/${ogSlug}.png`, canonical);
 ---
 
 <!doctype html>
@@ -34,9 +42,15 @@ const canonical = new URL(Astro.url.pathname, Astro.site ?? "https://tui-tools.g
     <meta property="og:site_name" content="tui-tools" />
     <meta property="og:title" content={fullTitle} />
     <meta property="og:description" content={description} />
-    <meta property="og:image" content={new URL(ogImage, canonical)} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content={description} />
     <meta property="og:url" content={canonical} />
-    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@edimarlnx" />
+    <meta name="twitter:creator" content="@edimarlnx" />
+    <meta name="twitter:image" content={ogImage} />
     <style set:html={accent === "tool" ? ":root { --accent: var(--tool); }" : ""} />
 
     <!-- Umami, self-hosted on Quave ONE. No cookies, no cross-site identifier,
