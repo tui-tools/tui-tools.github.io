@@ -1,0 +1,30 @@
+---
+// What the machine answered. The counterpart to CommandDialog: same frame,
+// same monospace, but no copy button, because nobody wants to copy an output.
+// The title says which command produced it, and `state` colours the frame the
+// way the rest of the site colours an answer: green when the check passed,
+// amber when it was made to fail on purpose.
+//
+// The transcript arrives as a `body` string rather than as children, so that
+// the exact bytes survive: markdown would otherwise reflow the blank lines and
+// the dotted alignment that `gh` prints.
+//
+// Everything placed in here is a transcript. See the editorial rule in
+// src/content.config.mjs: an output that was not produced by running the
+// command does not belong on the page.
+const { title, body, state = "ok" } = Astro.props;
+---
+
+<figure class:list={["dialog", "output", `output-${state}`]}>
+  <figcaption class="dialog-title">
+    <span class="lhs">{title}</span>
+    <span class="rhs">
+      <span class="chip" data-output-state={state}>
+        {state === "ok" ? "passed" : "rejected"}
+      </span>
+    </span>
+  </figcaption>
+  <div class="dialog-body">
+    <pre>{body.replace(/^\n+|\n+$/g, "")}</pre>
+  </div>
+</figure>

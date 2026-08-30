@@ -1404,3 +1404,218 @@ td .keycap {
 .brand span {
   white-space: nowrap;
 }
+
+/* --------------------------------------------------------------- guides */
+
+/*
+ * A guide is a long read, so it runs on one measured column rather than the
+ * split layouts the rest of the site uses. Everything the machine says keeps
+ * the dialog frame it has everywhere else: a command a reader is meant to copy
+ * is a real CommandDialog, and a transcript is the same frame without the copy
+ * button.
+ */
+
+.guide-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1rem;
+}
+
+.guide-card {
+  padding: 1.25rem 1.35rem;
+}
+
+.guide-card-body > :last-child {
+  margin-bottom: 0;
+}
+
+.guide-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.9rem;
+  font-family: var(--mono);
+  font-size: 0.76rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 0.6rem;
+  max-width: none;
+}
+
+.guide-updated {
+  color: var(--soon);
+}
+
+.guide-title {
+  font-size: var(--step-2);
+  margin: 0 0 0.6rem;
+}
+
+.guide-title a {
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.guide-title a:hover {
+  color: var(--accent);
+}
+
+.guide-blurb {
+  color: color-mix(in srgb, var(--fg) 80%, var(--muted));
+  font-size: 0.95rem;
+  margin-bottom: 0.9rem;
+}
+
+.chip.chip-category[href] {
+  text-decoration: none;
+}
+
+.guide {
+  padding-block: clamp(2.5rem, 5vw, 4rem);
+}
+
+.guide-header {
+  max-width: var(--measure);
+  margin-bottom: clamp(2rem, 4vw, 3rem);
+}
+
+.guide-header h1 {
+  font-size: var(--step-3);
+  margin-bottom: 1rem;
+}
+
+.guide-header .guide-meta {
+  margin: 1.25rem 0 0;
+}
+
+.guide-header .eyebrow a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.guide-header .eyebrow a:hover {
+  text-decoration: underline;
+}
+
+/* The reading column. Anything that carries a frame of its own — a command
+   dialog, a transcript — is allowed to run wider than the prose measure, so a
+   long checksum line does not scroll inside a narrow box. */
+.guide-body {
+  max-width: min(100%, 78ch);
+}
+
+.guide-body > * {
+  max-width: var(--measure);
+}
+
+.guide-body > .dialog {
+  max-width: none;
+  /* margin-inline, because a transcript is a <figure> and the user agent gives
+     one 40px of its own on each side. */
+  margin: 1.6rem 0;
+}
+
+.guide-body h2 {
+  font-size: var(--step-2);
+  margin: 2.75rem 0 1rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--frame);
+}
+
+.guide-body h3 {
+  font-size: 1.05rem;
+  margin: 2rem 0 0.75rem;
+}
+
+.guide-body ul,
+.guide-body ol {
+  max-width: var(--measure);
+  padding-left: 1.2rem;
+  margin: 0 0 1rem;
+}
+
+.guide-body li {
+  margin-bottom: 0.4rem;
+}
+
+/* The "proves / does not prove" pair after each check. A blockquote is the
+   right shape for it: the same words in the same order every time, set apart
+   from the narration around them. */
+.guide-body blockquote {
+  margin: 1.6rem 0;
+  padding: 0.9rem 1.15rem;
+  border-left: 3px solid var(--accent);
+  background: var(--panel);
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+
+.guide-body blockquote p {
+  font-size: 0.93rem;
+  color: color-mix(in srgb, var(--fg) 82%, var(--muted));
+}
+
+.guide-body blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+/* A fenced code block in a guide, for the rare case a command is not meant to
+   be copied. It wears the dialog's frame so it does not read as a third kind
+   of box. */
+.guide-body > pre {
+  max-width: none;
+  margin: 1.6rem 0;
+  padding: 0.9rem 1rem;
+  overflow-x: auto;
+  border: 1px solid var(--frame);
+  border-radius: var(--radius);
+  background: var(--panel);
+  font-size: 0.82rem;
+  line-height: 1.7;
+}
+
+.guide-body pre code {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: inherit;
+}
+
+/* A transcript: the dialog frame, no copy button, and a chip saying whether
+   the check passed or was made to fail. */
+.output .dialog-body pre {
+  white-space: pre;
+  color: color-mix(in srgb, var(--fg) 88%, var(--muted));
+}
+
+.output-fail {
+  border-color: color-mix(in srgb, var(--soon) 45%, var(--frame));
+}
+
+.chip[data-output-state="ok"] {
+  color: var(--family);
+  border-color: color-mix(in srgb, var(--family) 40%, var(--frame));
+}
+
+.chip[data-output-state="fail"] {
+  color: var(--soon);
+  border-color: color-mix(in srgb, var(--soon) 45%, var(--frame));
+}
+
+.guide-footer {
+  margin-top: clamp(2.5rem, 5vw, 3.5rem);
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--frame);
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.guide-footer p {
+  max-width: var(--measure);
+}
+
+.guide-footer > :last-child {
+  margin-bottom: 0;
+}

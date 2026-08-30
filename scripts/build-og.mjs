@@ -11,7 +11,8 @@
  *
  * Two kinds of card:
  *
- *   - the family card, for the grid, /install, /security, /kit and 404: the
+ *   - the family card, for the grid, /install, /guides, /security, /kit and
+ *     404, and for every guide, which shares the section's card: the
  *     brand mark, the wordmark, the page's own line, and the domain;
  *   - a tool card, for /tools/<name>: the prompt-prefixed tool name, the
  *     tagline out of its tool.json, and its first screenshot fitted on the
@@ -65,6 +66,11 @@ const PAGES = [
     slug: "install",
     title: "Install",
     line: "Signed apt, dnf and pacman repositories, or one static binary",
+  },
+  {
+    slug: "guides",
+    title: "Guides",
+    line: "Written after the work: real commands, real output, linked evidence",
   },
   {
     slug: "security",

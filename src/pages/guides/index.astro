@@ -1,0 +1,76 @@
+---
+// The guides index.
+//
+// A guide is written after the work, from a machine the commands were actually
+// run on; the editorial rule that governs what may appear here is in
+// src/content.config.mjs. Drafts are not listed and not built, which is the
+// same `publishedGuides()` call the page generator makes.
+import Base from "../../layouts/Base.astro";
+import { publishedGuides, guideDate, isoDay } from "../../lib/guides.js";
+
+const guides = await publishedGuides();
+---
+
+<Base
+  title="Guides"
+  description="Walkthroughs written from work that was actually done: real commands, real output, and a link to the evidence for every claim."
+  section="guides"
+  ogSlug="guides"
+>
+  <div class="page">
+    <section class="hero" style="grid-template-columns:1fr">
+      <div>
+        <p class="eyebrow">Guides</p>
+        <h1>Written after the work, not instead of it</h1>
+        <p class="lede">
+          Every guide here comes out of something that was actually done on a
+          real machine. The commands are the commands that were run, the output
+          is the output they produced, and where a claim can be checked without
+          taking this site's word for it, the link to check it is in the text.
+        </p>
+      </div>
+    </section>
+
+    <section class="section" style="padding-top:0">
+      {
+        guides.length === 0 ? (
+          <p class="empty">No guide has been published yet.</p>
+        ) : (
+          <ul class="guide-list">
+            {guides.map((guide) => (
+              <li>
+                <article class="card guide-card">
+                  <div class="guide-card-body">
+                    <p class="guide-meta">
+                      <time datetime={isoDay(guideDate(guide))}>
+                        {isoDay(guide.data.date)}
+                      </time>
+                      {guide.data.updated && (
+                        <span class="guide-updated">
+                          updated {isoDay(guide.data.updated)}
+                        </span>
+                      )}
+                    </p>
+                    <h2 class="guide-title">
+                      <a href={`/guides/${guide.id}/`}>{guide.data.title}</a>
+                    </h2>
+                    <p class="guide-blurb">{guide.data.description}</p>
+                    {guide.data.tools.length > 0 && (
+                      <p class="chips">
+                        {guide.data.tools.map((tool) => (
+                          <a class="chip chip-category" href={`/tools/${tool}/`}>
+                            {tool}
+                          </a>
+                        ))}
+                      </p>
+                    )}
+                  </div>
+                </article>
+              </li>
+            ))}
+          </ul>
+        )
+      }
+    </section>
+  </div>
+</Base>
