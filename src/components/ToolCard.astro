@@ -19,6 +19,16 @@ function elide(command, limit = 44) {
 }
 
 const headline = tool.headline ? elide(tool.headline.command) : null;
+
+/**
+ * The card says which program the tool drives and the floor it claims — "ufw ≥
+ * 0.36" — because that is the one compatibility fact worth knowing before
+ * opening the page. A backend with no declared minimum contributes its name
+ * alone; a tool that drives nothing contributes nothing.
+ */
+const backendHints = (tool.backends ?? [])
+  .map((backend) => (backend.minimum ? `${backend.binary} ≥ ${backend.minimum}` : backend.binary))
+  .slice(0, 2);
 ---
 
 <article class="card">
@@ -53,6 +63,7 @@ const headline = tool.headline ? elide(tool.headline.command) : null;
     <div class="card-meta">
       <span class="chip chip-category">{tool.category}</span>
       <span class="chip">linux · {platforms}</span>
+      {backendHints.map((hint) => <span class="chip chip-backend">{hint}</span>)}
     </div>
     {
       headline && (

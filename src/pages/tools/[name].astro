@@ -12,6 +12,10 @@ const { tool } = Astro.props;
 const rest = tool.name.replace(/^tui-/, "");
 const security = tool.security;
 
+// A tool that shells out to nothing declares no backends, and then there is no
+// compatibility to talk about: the section is simply absent.
+const backends = tool.backends ?? [];
+
 // The package managers are listed distro-first, but the pane that opens is the
 // first channel that actually works today: a reader should not land on a
 // command they cannot run. A remembered choice still overrides it.
@@ -234,6 +238,103 @@ const checks = [
         </section>
       </aside>
     </div>
+
+    {
+      backends.length > 0 && (
+        <section class="section" id="compatibility" style="padding-top:1rem">
+          <div class="section-head">
+            <h2>Compatibility</h2>
+          </div>
+          <p class="install-note" style="margin:0 0 1.25rem">
+            This tool is a face on the program below, so its version matters.
+            <strong>Tested</strong> is not a claim: a version lands there only
+            after the tool's own suite passed against it on a real machine in
+            the lab, and the run is kept as evidence in the repository. At
+            startup the tool probes the backend once and says what it found in
+            its header — a version nobody has run against is shown as
+            <code>(untested)</code> in the warning colour, one older than the
+            minimum as <code>(below minimum)</code> in the error colour. Neither
+            stops it: the backend still refuses what it cannot do, in its own
+            words.
+          </p>
+
+          <div class="stack">
+            {backends.map((backend) => (
+              <article class="panel compat">
+                <div class="compat-head">
+                  <h3>{backend.name}</h3>
+                  {backend.minimum && (
+                    <span class="chip chip-backend">
+                      {backend.binary} ≥ {backend.minimum}
+                    </span>
+                  )}
+                </div>
+
+                <dl class="dl-inline">
+                  <dt>Binary</dt>
+                  <dd><code>{backend.binary}</code></dd>
+                  {backend.minimum && (
+                    <>
+                      <dt>Minimum</dt>
+                      <dd><code>{backend.minimum}</code></dd>
+                    </>
+                  )}
+                  {backend.versionCommand && (
+                    <>
+                      <dt>Probed with</dt>
+                      <dd><code>{backend.versionCommand}</code></dd>
+                    </>
+                  )}
+                  <dt>Tested</dt>
+                  <dd>
+                    {backend.tested.length > 0 ? (
+                      <span class="chips">
+                        {backend.tested.map((version) => (
+                          <span class="chip chip-version">{version}</span>
+                        ))}
+                      </span>
+                    ) : (
+                      <span class="compat-none">
+                        No recorded run yet. The tool still runs and reports the
+                        version it found as untested.
+                      </span>
+                    )}
+                  </dd>
+                </dl>
+
+                {backend.features.length > 0 && (
+                  <div class="compat-block">
+                    <h4>Needs a version this new</h4>
+                    <ul class="compat-features">
+                      {backend.features.map((feature) => (
+                        <li>
+                          <code>{feature.name}</code>
+                          <span class="chip">since {feature.since}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {backend.notes.length > 0 && (
+                  <div class="compat-block">
+                    <h4>What changes on older versions</h4>
+                    <ul class="compat-notes">
+                      {backend.notes.map((note) => (
+                        <li>
+                          <code class="compat-range">{backend.name} {note.range}</code>
+                          <p set:html={renderInline(note.impact)} />
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </article>
+            ))}
+          </div>
+        </section>
+      )
+    }
 
     <section class="section" id="install" style="padding-top:1rem">
       <div class="section-head">

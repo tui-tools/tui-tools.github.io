@@ -24,7 +24,8 @@ that has one is a tool; one that does not — `tui-kit`, `.github`, this
 repository — is simply not in the grid. For each tool it then collects:
 
 - the **manifest**: tagline, description, category, platforms, keys, install
-  channels, security posture, maintainers;
+  channels, security posture, maintainers, and the **backends** the tool drives
+  with everything it knows about their versions;
 - the **latest release**: tag, date, every asset with its size, and the SHA-256
   sums parsed out of that release's `checksums.txt`;
 - the **release history**, for the changelog list on the tool page;
@@ -39,6 +40,30 @@ The schema those manifests are validated against lives in the kit:
 [`tui-kit/schema/tool.schema.json`](https://github.com/tui-tools/tui-kit/blob/main/schema/tool.schema.json),
 documented in
 [`tui-kit/docs/tool-manifest.md`](https://github.com/tui-tools/tui-kit/blob/main/docs/tool-manifest.md).
+
+### Backend compatibility
+
+A tool that drives someone else's program declares it in the manifest's
+`backends[]`, and the site renders that block as the **Compatibility** section
+on the tool page: the binary, the minimum version the tool claims, the versions
+it has really been tested against, the features that need a given version, and
+the version-ranged caveats with what each one does to the user. The grid card
+carries the short form of the same fact — `ufw ≥ 0.36` — because that is what
+decides whether the tool is worth opening. A tool that shells out to nothing
+declares no backends and neither surface shows anything.
+
+`tested` is evidence rather than a claim: the versions come from
+`compat/results.jsonl` in the tool's own repository, which its smoke suite
+writes while running inside a [tui-lab](https://github.com/tui-tools/tui-lab)
+guest, and `tui-kit/tools/compat-sync.py` regenerates the manifest from. The
+running binary reads the same block to probe the backend at startup, so a
+version the site does not list is one the tool's header marks `(untested)`. The
+whole mechanism is documented in
+[`tui-kit/docs/compatibility.md`](https://github.com/tui-tools/tui-kit/blob/main/docs/compatibility.md).
+
+`scripts/build-catalog.mjs` copies the block into the catalog minus the fields
+only the running binary needs — `versionRegex` and `searchPaths` — since the
+probe is the tool's business, not the website's.
 
 ## Adding a tool to the site
 
@@ -277,7 +302,7 @@ without a site to build.
 | --- | --- |
 | `scripts/build-catalog.mjs` | The whole data layer: org → manifests → releases → images → `catalog.json` |
 | `src/pages/index.astro` | The marketplace grid, with a category filter |
-| `src/pages/tools/[name].astro` | A tool: gallery, description, keys, install picker, security, downloads, releases |
+| `src/pages/tools/[name].astro` | A tool: gallery, description, keys, compatibility, install picker, security, downloads, releases |
 | `src/pages/install.astro` | Family-level install: the repository setup per package manager, and how to verify a download |
 | `src/pages/security.astro` | The family's principles, every tool's answers, and how to report |
 | `src/pages/kit.astro` | What `tui-kit` is |

@@ -220,6 +220,33 @@ function buildInstall(manifest, release) {
   return entries;
 }
 
+/**
+ * The manifest's `backends[]`, reduced to what a page renders: the program the
+ * tool drives, the floor it claims, the versions the lab has really run, the
+ * version-gated features and the version-ranged caveats. What only the running
+ * binary needs — `versionRegex`, `searchPaths` — is deliberately left out: the
+ * probe is the tool's business, not the website's. A tool that shells out to
+ * nothing declares no backends and the site shows nothing.
+ */
+function buildBackends(manifest) {
+  return (manifest.backends ?? []).map((backend) => ({
+    name: backend.name,
+    binary: backend.binary,
+    // The argv is flattened into the command line a reader could type.
+    versionCommand: (backend.versionCommand ?? []).join(" "),
+    minimum: backend.minimum ?? null,
+    tested: backend.tested ?? [],
+    features: (backend.features ?? []).map((feature) => ({
+      name: feature.name,
+      since: feature.since,
+    })),
+    notes: (backend.notes ?? []).map((note) => ({
+      range: note.range,
+      impact: note.impact,
+    })),
+  }));
+}
+
 /** The one-line install a card shows: the first channel that works today. */
 function headlineInstall(entries) {
   const ready = entries.find((entry) => entry.available && entry.id !== "source");
@@ -270,6 +297,7 @@ async function buildTool(repo) {
     license: manifest.license,
     platforms: manifest.platforms,
     keys: manifest.keys ?? [],
+    backends: buildBackends(manifest),
     keywords: manifest.keywords ?? [],
     maintainers: manifest.maintainers ?? [],
     since: manifest.since,

@@ -462,6 +462,11 @@ hr {
   border-color: color-mix(in srgb, var(--family) 35%, var(--frame));
 }
 
+.chip-backend {
+  color: var(--tool);
+  border-color: color-mix(in srgb, var(--tool) 35%, var(--frame));
+}
+
 .chip-unreleased {
   color: var(--soon);
   border-color: color-mix(in srgb, var(--soon) 40%, var(--frame));
@@ -971,6 +976,101 @@ td .keycap {
 }
 
 /* ------------------------------------------------------------ downloads */
+
+/* ------------------------------------------------------- compatibility */
+
+.compat h3 {
+  font-family: var(--mono);
+  font-size: 0.95rem;
+  letter-spacing: -0.01em;
+  text-transform: none;
+  color: var(--fg);
+  margin: 0;
+}
+
+.compat-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+/* One column on a phone: the labels are wide enough that a two-column grid
+   leaves the version chips wrapping one per line. */
+.compat .dl-inline {
+  grid-template-columns: 1fr;
+  gap: 0.2rem 1rem;
+}
+
+.compat .dl-inline dt + dd {
+  margin-bottom: 0.55rem;
+}
+
+@media (min-width: 34rem) {
+  .compat .dl-inline {
+    grid-template-columns: auto 1fr;
+    gap: 0.55rem 1rem;
+  }
+
+  .compat .dl-inline dt + dd {
+    margin-bottom: 0;
+  }
+}
+
+.compat-none {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.compat-block {
+  margin-top: 1.1rem;
+  border-top: 1px dashed var(--frame);
+  padding-top: 0.9rem;
+}
+
+.compat-block h4 {
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 0.7rem;
+}
+
+.compat-features,
+.compat-notes {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+}
+
+.compat-features li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.88rem;
+}
+
+.compat-notes li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.compat-notes p {
+  margin: 0;
+  font-size: 0.88rem;
+  color: color-mix(in srgb, var(--fg) 82%, var(--muted));
+}
+
+.compat-range {
+  align-self: flex-start;
+  color: var(--soon);
+}
 
 .downloads td.sum {
   font-family: var(--mono);
