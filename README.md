@@ -184,7 +184,8 @@ than rename.
 **How to opt out.** Turn on "Do Not Track" in your browser and the script stands
 down: the tag carries `data-do-not-track="true"`, so it sends nothing at all.
 Any content blocker also stops it, and the site works exactly the same without
-it. The script is served from the site's own analytics host as `stats.js`.
+it — nothing on the page waits for the script, and nothing breaks when it never
+arrives.
 
 ## The design, in one paragraph
 
