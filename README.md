@@ -74,8 +74,8 @@ There is no step in this repository.
 2. Fill in its `tool.json` — the template's copy is a valid example, and CI
    validates it against the schema on every push.
 3. Tag `v0.1.0` and let the release ship.
-4. The site picks it up on its **next hourly build**, or immediately if the
-   tool's release workflow dispatches (see below).
+4. The site picks it up on its **next hourly build**. To not wait, run the
+   workflow: `gh workflow run publish.yml -R tui-tools/tui-tools.github.io`.
 
 ## Publishing
 
@@ -84,42 +84,25 @@ There is no step in this repository.
 | Trigger | Why |
 | --- | --- |
 | push to `main` | a change to the site itself |
-| `schedule`, hourly at :17 | a release that did not dispatch still appears within the hour |
+| `schedule`, hourly at :17 | a release in another repository appears within the hour |
 | `workflow_dispatch` | rebuild on demand |
-| `repository_dispatch`, type `tool-released` | a release just shipped, rebuild now |
 
 It builds the catalog, runs `astro build`, and deploys `dist/` with
 `actions/deploy-pages`. Pages is configured with **GitHub Actions** as its
 source; there is no `gh-pages` branch.
 
-### The dispatch token (owner action)
+### Why nothing wakes it
 
-Every tool's CI already carries the step that wakes this site, and it is inert
-until the secret exists:
+A tool's release could tell this repository to rebuild immediately, and for a
+while one did. Doing so needs a token with write access to this repository,
+held as a secret on every public tool repository — fourteen copies of a key to
+the site, to save at most an hour of staleness on a page nobody is watching
+change. **No secrets outside this repository.** The tools publish releases and
+the site comes and looks; when an hour is too long, run the workflow by hand:
 
-```yaml
-- name: notify the website
-  if: env.SITE_DISPATCH_TOKEN != ''
-  env:
-    GH_TOKEN: ${{ env.SITE_DISPATCH_TOKEN }}
-  run: |
-    gh api repos/tui-tools/tui-tools.github.io/dispatches \
-      -f event_type=tool-released \
-      -f 'client_payload[tool]=tui-firewall'
+```sh
+gh workflow run publish.yml -R tui-tools/tui-tools.github.io
 ```
-
-To turn it on, create a **fine-grained personal access token**:
-
-- **Resource owner**: the `tui-tools` organization.
-- **Repository access**: only `tui-tools/tui-tools.github.io`.
-- **Permissions**: `Contents: Read and write` — that is what the
-  `POST /repos/{owner}/{repo}/dispatches` endpoint requires.
-- Then add it as the secret `SITE_DISPATCH_TOKEN` in each tool repository, or
-  once as an **organization** secret scoped to the tool repositories.
-
-Without it, nothing breaks: the hourly build covers the same ground with at
-most an hour's delay. A GitHub App installation token works too, and is the
-better answer if the family grows.
 
 ### The custom domain (owner action)
 

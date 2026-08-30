@@ -2,21 +2,26 @@
 #
 # The site has no content of its own to keep in sync: every tool's card and
 # detail page is built from that tool's tool.json, its latest release and the
-# images the manifest points at. So this runs on a schedule as well as on a
-# push, and a tool's release workflow can wake it immediately by sending a
-# `tool-released` repository dispatch.
+# images the manifest points at. A release in another repository therefore
+# changes a page here with no commit to push, which is why this runs on a
+# schedule as well as on a push.
+#
+# It runs on a schedule rather than being woken by the tools, and that is the
+# security decision, not an oversight: waking it would mean a token with write
+# access to this repository sitting as a secret on every public tool
+# repository. No secrets outside this repository. The tools publish releases,
+# and the site comes and looks, hourly.
 name: publish
 
 on:
   push:
     branches: [main]
   schedule:
-    # Hourly, off the hour: a release that does not dispatch still shows up
-    # within the hour.
+    # Hourly, off the hour: a release in another repository shows up here
+    # within the hour. To have it sooner:
+    #   gh workflow run publish.yml -R tui-tools/tui-tools.github.io
     - cron: "17 * * * *"
   workflow_dispatch:
-  repository_dispatch:
-    types: [tool-released]
 
 permissions:
   contents: read
