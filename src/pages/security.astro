@@ -2,8 +2,33 @@
 import Base from "../layouts/Base.astro";
 import CommandDialog from "../components/CommandDialog.astro";
 import catalog from "../data/catalog.json";
+import scorecard from "../data/scorecard.json";
 
 const tools = catalog.tools;
+
+// One row per repository the Scorecard step asked about: the catalog's tools
+// plus tui-kit and the tui-tools launcher, which carry no tool.json. A row
+// with no published result yet is kept and shown as pending rather than
+// dropped, so the table is the whole family either way.
+const scorecards = (scorecard.results ?? []).map((result) => ({
+  repo: result.repo,
+  badge: result.badge,
+  viewer: result.viewer,
+  published: result.status === "published",
+  score: result.score ?? null,
+  measured: result.date ? result.date.slice(0, 10) : "—",
+  // Everything that is not a 10, weakest first. -1 is Scorecard's "this check
+  // could not run here", which the chip prints as n/a rather than as a zero.
+  open: (result.checks ?? [])
+    .filter((check) => check.score < 10)
+    .sort(
+      (a, b) =>
+        // Real scores first, weakest first; the ones that could not run last.
+        (a.score < 0) - (b.score < 0) ||
+        a.score - b.score ||
+        a.name.localeCompare(b.name),
+    ),
+}));
 
 const principles = [
   {
@@ -88,6 +113,176 @@ function mark(value) {
       </div>
     </section>
 
+    <section class="section" style="padding-top:0" id="gate">
+      <div class="section-head">
+        <h2>What the gate checks</h2>
+        <span class="chip">every tag, every package</span>
+      </div>
+      <div class="grid">
+        <div class="panel">
+          <h3>Before a tag becomes a release</h3>
+          <p style="font-size:0.93rem;color:color-mix(in srgb, var(--fg) 80%, var(--muted));margin-bottom:0">
+            The <code>security</code> job runs <code>govulncheck</code> over the
+            code the build actually reaches and <code>gitleaks</code> over both
+            the working tree and the whole git history, because a secret
+            committed once stays reachable long after the commit that removed
+            it. <code>gosec</code> runs earlier, inside the lint bar. The
+            release job needs the security job to be green; a red one is a tag
+            without a release.
+          </p>
+        </div>
+        <div class="panel">
+          <h3>What ships beside the binaries</h3>
+          <p style="font-size:0.93rem;color:color-mix(in srgb, var(--fg) 80%, var(--muted));margin-bottom:0">
+            A CycloneDX SBOM per archive, a keyless cosign signature over
+            <code>checksums.txt</code> as a Sigstore bundle, and SLSA build
+            provenance attested for every archive, every package and the
+            checksum file. None of it needs a key to be distributed: both
+            signatures are tied to the workflow identity GitHub issued at build
+            time.
+          </p>
+        </div>
+        <div class="panel">
+          <h3>Before a package enters the repository</h3>
+          <p style="font-size:0.93rem;color:color-mix(in srgb, var(--fg) 80%, var(--muted));margin-bottom:0">
+            <a href="https://pkgs.tui.tools" rel="noopener">pkgs.tui.tools</a>
+            accepts a package only if its sha256 matches the release's
+            <code>checksums.txt</code>, that file carries a valid cosign
+            signature from the tool's own release workflow,
+            <code>gh attestation verify</code> passes on the file itself, and
+            trivy finds no HIGH or CRITICAL vulnerability inside it. Any one
+            failing rejects the package and fails the build; there is no
+            warn-only mode. These are in addition to the repository's GPG
+            signatures, not instead of them: provenance and the scan are about
+            what may go in, the GPG signatures are what your machine checks on
+            the way out.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" style="padding-top:0" id="scorecard">
+      <div class="section-head">
+        <h2>Scorecard</h2>
+        <span class="chip">OpenSSF, weekly</span>
+      </div>
+      <p class="install-note" style="margin-top:0">
+        The score is the aggregate of the 18 checks
+        <a href="https://github.com/ossf/scorecard" rel="noopener">OpenSSF Scorecard</a>
+        runs weekly against each repository, and it is the same number the badge
+        in that repository's README shows. The chips are every check that did
+        not score 10, so what is still open is on this page rather than one
+        click away.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Repository</th>
+              <th scope="col">Badge</th>
+              <th scope="col">Score</th>
+              <th scope="col">Measured</th>
+              <th scope="col">Below 10</th>
+            </tr>
+          </thead>
+          <tbody>
+            {
+              scorecards.map((row) => (
+                <tr>
+                  <td class="mono">
+                    <a href={`https://github.com/tui-tools/${row.repo}`} rel="noopener">
+                      {row.repo}
+                    </a>
+                  </td>
+                  <td>
+                    <a href={row.viewer} rel="noopener">
+                      <img
+                        src={row.badge}
+                        alt={`OpenSSF Scorecard for ${row.repo}`}
+                        height="20"
+                        loading="lazy"
+                        style="display:block;height:20px;width:auto"
+                      />
+                    </a>
+                  </td>
+                  <td class="mono" style={row.published ? "color:var(--family)" : "color:var(--soon)"}>
+                    {row.published ? row.score.toFixed(1) : "pending"}
+                  </td>
+                  <td class="mono" style="color:var(--muted)">{row.measured}</td>
+                  <td>
+                    {row.published ? (
+                      <div class="chips">
+                        {row.open.length === 0 ? (
+                          <span class="chip chip-version">all 18 at 10</span>
+                        ) : (
+                          row.open.map((check) => (
+                            <span
+                              class:list={["chip", check.score < 0 ? "" : "chip-unreleased"]}
+                              title={check.reason ?? undefined}
+                            >
+                              {check.name} {check.score < 0 ? "n/a" : check.score}
+                            </span>
+                          ))
+                        )}
+                      </div>
+                    ) : (
+                      <span style="color:var(--muted);font-size:0.85rem">
+                        the first weekly run has not been indexed yet
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section" style="padding-top:0" id="verify-release">
+      <div class="section-head">
+        <h2>Verify a release yourself</h2>
+        <span class="chip">tui-firewall, as the example</span>
+      </div>
+      <div class="split">
+        <div class="stack">
+          <CommandDialog
+            title="Was this file built by that repository's workflow?"
+            command="gh attestation verify tui-firewall_0.2.2_amd64.deb -R tui-tools/tui-firewall"
+          />
+          <CommandDialog
+            title="Is the checksum list signed by that repository's ci.yml, on a tag?"
+            command={`cosign verify-blob \\
+  --bundle checksums.txt.sigstore.json \\
+  --certificate-identity-regexp \\
+    '^https://github.com/tui-tools/tui-firewall/\\.github/workflows/ci\\.yml@refs/tags/v' \\
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \\
+  checksums.txt`}
+          />
+          <CommandDialog
+            title="Are the bytes you downloaded the ones that list names?"
+            command="sha256sum -c --ignore-missing checksums.txt"
+          />
+        </div>
+        <div class="panel">
+          <h2>Why the regexp is the point</h2>
+          <p style="font-size:0.9rem;color:var(--muted)">
+            The identity regexp says the signature has to come from that
+            repository's <code>ci.yml</code>, running on a tag. Without it,
+            <code>cosign</code> would accept anything signed by anyone. Replace
+            <code>tui-firewall</code> with the tool you are verifying;
+            everything else is identical across the family.
+          </p>
+          <p style="font-size:0.9rem;color:var(--muted);margin-bottom:0">
+            Every asset of every release, with its SHA-256 as parsed from
+            <code>checksums.txt</code> at build time, is also in
+            <a href="/catalog.json">catalog.json</a>, so you can compare before
+            downloading anything.
+          </p>
+        </div>
+      </div>
+    </section>
+
     <section class="section" style="padding-top:0" id="matrix">
       <div class="section-head">
         <h2>Every tool, answered</h2>
@@ -124,8 +319,11 @@ function mark(value) {
         </table>
       </div>
       <p class="install-note">
-        The last column is the open item. Releases carry SHA-256 checksums and
-        nothing else, which is stated here rather than left for you to discover.
+        The last column is what each tool.json still declares, and it is behind
+        the facts: releases now carry cosign signatures and build provenance,
+        as <a href="#gate">the gate</a> above describes. The manifests are
+        updated tool by tool, and this column follows them rather than
+        anticipating them.
       </p>
     </section>
 
@@ -180,11 +378,10 @@ sha256sum -c checksums.txt --ignore-missing`}
             broken mirror, not a compromised release.
           </p>
           <p style="font-size:0.9rem;color:var(--muted);margin-bottom:0">
-            Signatures are what would close that gap, and they are not in place
-            yet. Until they are, the strongest check available is building from
-            source: the repositories are small, the dependencies are Bubble Tea,
-            Bubbles, Lip Gloss and the kit, and <code>make build</code> is the
-            whole story.
+            Signatures close that gap, and they are in place:
+            <a href="#verify-release">verify a release yourself</a> is the
+            check that answers who built the file, not just whether it arrived
+            intact.
           </p>
         </div>
       </div>

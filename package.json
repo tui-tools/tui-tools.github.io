@@ -5,7 +5,7 @@
   "type": "module",
   "description": "The tui-tools family website.",
   "scripts": {
-    "catalog": "node scripts/build-catalog.mjs",
+    "catalog": "node scripts/build-catalog.mjs && node scripts/build-scorecard.mjs",
     "og": "node scripts/build-og.mjs",
     "dev": "npm run catalog && npm run og && astro dev",
     "build": "npm run catalog && npm run og && astro build",

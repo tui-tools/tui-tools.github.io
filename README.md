@@ -16,6 +16,7 @@ a tool, change a version, or update a screenshot.
 tui-tools/<tool>/tool.json  ─┐
 GitHub releases API         ─┼─► scripts/build-catalog.mjs ─► src/data/catalog.json ─┬─► scripts/build-og.mjs ─► public/og/*.png ─┐
 icons and screenshots       ─┘                                                     └───────────────── astro build ─────────────────┴─► Pages
+OpenSSF Scorecard API       ───► scripts/build-scorecard.mjs ─► src/data/scorecard.json ──────────────────────────────────────────┘
 ```
 
 `scripts/build-catalog.mjs` lists the public repositories in the organization
@@ -35,6 +36,18 @@ repository — is simply not in the grid. For each tool it then collects:
 
 A tool with no release yet is kept and marked **unreleased** rather than
 hidden. `tui-template` is the standing example.
+
+`scripts/build-scorecard.mjs` runs in the same `npm run catalog` step, right
+after the catalog. For every tool in it, plus `tui-kit` and the `tui-tools`
+launcher, it asks `api.securityscorecards.dev` for the repository's published
+OpenSSF Scorecard result and writes `src/data/scorecard.json`, which the
+security page renders. A repository the weekly workflow has not been indexed
+for answers 404; that, a timeout and an API that is down are all recorded as
+pending and shown as pending. The script never fails the build.
+
+The one thing on the security page that is not built here is the badge image
+itself: it is served by the Scorecard API, so it is current even between
+builds.
 
 The schema those manifests are validated against lives in the kit:
 [`tui-kit/schema/tool.schema.json`](https://github.com/tui-tools/tui-kit/blob/main/schema/tool.schema.json),
@@ -444,11 +457,12 @@ already on disk.
 | Path | What it is |
 | --- | --- |
 | `scripts/build-catalog.mjs` | The whole data layer: org → manifests → releases → images → `catalog.json` |
+| `scripts/build-scorecard.mjs` | The OpenSSF Scorecard result per repository → `scorecard.json`, pending when there is none yet |
 | `scripts/build-og.mjs` | The 1200×630 link preview each page points `og:image` at |
 | `src/pages/index.astro` | The marketplace grid, with a category filter |
 | `src/pages/tools/[name].astro` | A tool: gallery, description, keys, compatibility, install picker, security, downloads, releases |
 | `src/pages/install.astro` | Family-level install: the repository setup per package manager, and how to verify a download |
-| `src/pages/security.astro` | The family's principles, every tool's answers, and how to report |
+| `src/pages/security.astro` | The family's principles, every tool's answers, what the release gate checks, the Scorecard table and how to report |
 | `src/pages/kit.astro` | What `tui-kit` is |
 | `src/pages/robots.txt.js` | `robots.txt`, built from `site` so no host is hardcoded |
 | `src/pages/catalog.json.js` | `/catalog.json`, the machine-readable catalog described above |
