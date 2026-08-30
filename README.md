@@ -61,8 +61,9 @@ Slack, LinkedIn, Discord — and that card is the first look most people get.
 `scripts/build-og.mjs` draws one per page, 1200×630, into `public/og/<slug>.png`
 between the catalog and `astro build`:
 
-- `home`, `install`, `security` and `kit` get the **family card**: the brand
-  mark, the wordmark, the page's own line, and the domain.
+- `home`, `install`, `guides`, `security` and `kit` get the **family card**:
+  the brand mark, the wordmark, the page's own line, and the domain. Every
+  guide points at the `guides` card, so a new guide needs no new artwork.
 - every tool gets a **tool card**: `>_ tui-<name>`, the tagline out of its
   `tool.json`, and its first screenshot fitted on the right. The screenshot is
   already on disk — the catalog downloaded it a step earlier — so nothing is
@@ -482,6 +483,11 @@ already on disk.
 | `src/pages/tools/[name].astro` | A tool: gallery, description, keys, compatibility, install picker, security, downloads, releases |
 | `src/pages/install.astro` | Family-level install: the repository setup per package manager, and how to verify a download |
 | `src/pages/security.astro` | The family's principles, every tool's answers, what the release gate checks, the Scorecard table and how to report |
+| `src/pages/guides/index.astro` | The guides index, published guides only |
+| `src/pages/guides/[...slug].astro` | One guide, rendered from the `guides` collection |
+| `src/content.config.mjs` | The `guides` collection: its schema, and the editorial rule a guide has to satisfy |
+| `src/lib/guides.js` | The one way the site reads the collection, so a draft cannot be listed by one page and served by another |
+| `src/components/OutputBlock.astro` | A transcript: the command dialog's frame, without the copy button |
 | `src/pages/kit.astro` | What `tui-kit` is |
 | `src/pages/robots.txt.js` | `robots.txt`, built from `site` so no host is hardcoded |
 | `src/pages/catalog.json.js` | `/catalog.json`, the machine-readable catalog described above |
@@ -490,6 +496,32 @@ already on disk.
 | `src/styles/global.css` | Tokyo Night, and the type rule: the machine speaks in mono, we speak in sans |
 
 ![The install page](docs/screenshots/install.png)
+
+## Guides
+
+`/guides/` is a small content collection, not a blog. The rule a guide is
+written under is stated in full at the top of
+[`src/content.config.mjs`](src/content.config.mjs) and it is the only rule that
+matters here: **a guide is born from validated work only.** It is written after
+the work, on a machine the commands were actually run on. Every command in it
+was run exactly as it appears, every output is a transcript trimmed for length
+and never edited for effect, every claim links to evidence a reader can check
+without trusting this site, and every failure mode shown was provoked rather
+than described. What a check does not prove is stated as plainly as what it
+does. A step that could not be run does not go in.
+
+Guides are `.mdx`, which is the only reason MDX is a dependency: the prose
+stays markdown while a command a reader is meant to copy is the site's own
+`CommandDialog`, the same box every other page shows a command in. A transcript
+goes in `OutputBlock`, which is the same frame without a copy button, because
+nobody wants to copy an output.
+
+`draft: true` in the frontmatter keeps an entry out of the build entirely. It
+is not listed, no page is generated for it, and it gets no sitemap entry, so
+there is no URL to find by guessing. The index and the page generator both go
+through `publishedGuides()` in [`src/lib/guides.js`](src/lib/guides.js) so the
+two can never disagree, and `astro.config.mjs` applies the same skip when it
+works out `lastmod`.
 
 ## Analytics
 

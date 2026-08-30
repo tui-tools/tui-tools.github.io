@@ -1,0 +1,76 @@
+---
+// One guide.
+//
+// getStaticPaths goes through the same `publishedGuides()` the index uses, so
+// a draft has no page at all: not a hidden one, not one reachable by guessing
+// the URL.
+import { render } from "astro:content";
+import Base from "../../layouts/Base.astro";
+import { publishedGuides, guideDate, isoDay } from "../../lib/guides.js";
+import catalog from "../../data/catalog.json";
+
+export async function getStaticPaths() {
+  const guides = await publishedGuides();
+  return guides.map((guide) => ({ params: { slug: guide.id }, props: { guide } }));
+}
+
+const { guide } = Astro.props;
+const { Content } = await render(guide);
+
+// A named tool only becomes a link when it is really in the catalog; a typo in
+// the frontmatter should read as plain text rather than as a link to a 404.
+const known = new Set(catalog.tools.map((tool) => tool.name));
+const tools = guide.data.tools.map((name) => ({ name, known: known.has(name) }));
+---
+
+<Base
+  title={guide.data.title}
+  description={guide.data.description}
+  section="guides"
+  ogSlug="guides"
+>
+  <div class="page">
+    <article class="guide">
+      <header class="guide-header">
+        <p class="eyebrow"><a href="/guides/">Guides</a></p>
+        <h1>{guide.data.title}</h1>
+        <p class="lede">{guide.data.description}</p>
+        <p class="guide-meta">
+          <time datetime={isoDay(guideDate(guide))}>
+            published {isoDay(guide.data.date)}
+          </time>
+          {
+            guide.data.updated && (
+              <span class="guide-updated">updated {isoDay(guide.data.updated)}</span>
+            )
+          }
+          {
+            tools.map((tool) =>
+              tool.known ? (
+                <a class="chip chip-category" href={`/tools/${tool.name}/`}>
+                  {tool.name}
+                </a>
+              ) : (
+                <span class="chip chip-category">{tool.name}</span>
+              ),
+            )
+          }
+        </p>
+      </header>
+
+      <div class="guide-body prose">
+        <Content />
+      </div>
+
+      <footer class="guide-footer">
+        <p>
+          Something here wrong, or out of date? The commands were run on the
+          date above and the outputs are transcripts; if a release since then
+          behaves differently, that is worth an issue on the tool's repository.
+          <a href="https://github.com/tui-tools" rel="noopener">github.com/tui-tools</a>
+        </p>
+        <p><a href="/guides/">All guides</a></p>
+      </footer>
+    </article>
+  </div>
+</Base>

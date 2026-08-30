@@ -1,0 +1,231 @@
+---
+title: Verify a release before you run it
+description: Three checks, with the real commands and the real output, that answer who built a tui-tools binary before you give it your root password.
+date: 2026-08-30
+tools:
+  - tui-firewall
+draft: false
+---
+
+import CommandDialog from "../../components/CommandDialog.astro";
+import OutputBlock from "../../components/OutputBlock.astro";
+
+Every command and every transcript on this page was run against
+[tui-firewall v0.2.2](https://github.com/tui-tools/tui-firewall/releases/tag/v0.2.2)
+on a Fedora workstation, with `gh` 2.95.0 and `cosign` v2.6.1, before the page
+was written. Replace `tui-firewall` with the tool you are checking and nothing
+else changes.
+
+## Why this matters more here than usual
+
+A tui-tools binary is a front end for a program that changes a running system.
+`tui-firewall` drives `ufw`, `tui-systemd` drives `systemctl`, `tui-users`
+edits accounts. The design keeps that honest at run time: nothing is changed
+without the exact command line being shown and confirmed first, and escalation
+happens through `sudo -n` for actions only. The [Security](/security/) page
+sets out each of those promises and what it is worth.
+
+But all of it is a promise made by the binary. A binary that is not the one the
+project built makes whatever promise its author wants it to make, and the first
+time you run it you are typing your sudo password into it. So the interesting
+question is not what the tool does. It is: is this file the artifact that
+repository's workflow produced?
+
+That question has an answer you can check yourself in three commands, without
+trusting this page, and without any key that has to be distributed and rotated.
+Signing is keyless: both signatures are tied to the workflow identity GitHub
+issued at build time, so what you are verifying is not "someone holds the
+private key" but "GitHub Actions ran this repository's `ci.yml` on a tag and
+produced this file".
+
+## Get the files
+
+You need the artifact you intend to install, the release's `checksums.txt`, and
+the Sigstore bundle that signs it.
+
+<CommandDialog
+  title="Download the artifact, the checksum list and its signature"
+  command={`gh release download v0.2.2 --repo tui-tools/tui-firewall \\
+  -p 'tui-firewall_0.2.2_linux_amd64.tar.gz' \\
+  -p 'checksums.txt' -p 'checksums.txt.sigstore.json'`}
+/>
+
+## Check one: was this file built by that repository's workflow?
+
+<CommandDialog
+  title="Build provenance, on the file itself"
+  command="gh attestation verify tui-firewall_0.2.2_linux_amd64.tar.gz -R tui-tools/tui-firewall"
+/>
+
+<OutputBlock
+  title="gh attestation verify, trimmed"
+  body={String.raw`
+Loaded digest sha256:911a00eee8bb7956b6df66bc87175237f53b30acb31ffc7ae7952a27f38a940a for file://tui-firewall_0.2.2_linux_amd64.tar.gz
+Loaded 1 attestation from GitHub API
+
+The following policy criteria will be enforced:
+- Predicate type must match:................ https://slsa.dev/provenance/v1
+- Source Repository Owner URI must match:... https://github.com/tui-tools
+- Source Repository URI must match:......... https://github.com/tui-tools/tui-firewall
+- Subject Alternative Name must match regex: (?i)^https://github.com/tui-tools/tui-firewall/
+- OIDC Issuer must match:................... https://token.actions.githubusercontent.com
+
+✓ Verification succeeded!
+
+The following 1 attestation matched the policy criteria
+
+- Attestation #1
+  - Build repo:..... tui-tools/tui-firewall
+  - Build workflow:. .github/workflows/ci.yml@refs/tags/v0.2.2
+  - Signer repo:.... tui-tools/tui-firewall
+  - Signer workflow: .github/workflows/ci.yml@refs/tags/v0.2.2
+`}
+/>
+
+The policy block is the part worth reading, because it is what the command
+enforced rather than what it found. The last two lines are the answer: the
+file's digest was attested by `.github/workflows/ci.yml` running on the tag
+`v0.2.2` in `tui-tools/tui-firewall`.
+
+One practical note. `gh` prints this summary only when its output is a
+terminal. Piped to a file or run inside a script it prints nothing at all and
+still exits 0 on success, so in a script the exit status is the thing to read,
+not the output.
+
+A binary someone rebuilt with an extra line in it has a different digest, and
+GitHub has no attestation for that digest. Appending one byte to the `.deb`
+gave this, which is a rejection rather than a passing check with a warning
+attached:
+
+<OutputBlock
+  state="fail"
+  title="The same command against a file with one byte appended"
+  body={String.raw`
+Error: HTTP 404: Not Found (https://api.github.com/repos/tui-tools/tui-firewall/attestations/sha256:618134bc4b5ecf3c13eca7fe03e81759890a1a5c3f1761fa7417f8ef2423334f?per_page=30&predicate_type=https%3A%2F%2Fslsa.dev%2Fprovenance%2Fv1)
+`}
+/>
+
+> Proves: that this exact byte sequence came out of a GitHub Actions run of
+> that repository's workflow, on a tag.
+>
+> Does not prove: that the source the workflow compiled is good code, or that
+> the tag points where you think it does. This is origin, not intention. It
+> also needs the network, because the attestation is fetched from the GitHub
+> API at the moment you run the command.
+
+## Check two: is the checksum list signed by that repository, on a tag?
+
+Provenance answers for one file at a time. The signature answers for the
+release as a whole, because what is signed is `checksums.txt`, and that file
+names every asset.
+
+<CommandDialog
+  title="Keyless signature over the release's checksum list"
+  command={`cosign verify-blob \\
+  --bundle checksums.txt.sigstore.json \\
+  --certificate-identity-regexp \\
+    '^https://github.com/tui-tools/tui-firewall/\\.github/workflows/ci\\.yml@refs/tags/v' \\
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \\
+  checksums.txt`}
+/>
+
+<OutputBlock
+  title="cosign verify-blob"
+  body={String.raw`
+Verified OK
+`}
+/>
+
+Two words, and it is easy to miss how much of the work is in the arguments
+rather than in the result. The identity regexp is the check. It says the
+signing certificate's subject has to be that repository's `ci.yml`, running on
+a `v` tag. Drop it and `cosign` will happily accept a blob signed by anyone at
+all who can get a Sigstore certificate, which is everyone. Point it at a
+sibling repository in the same organization and it refuses:
+
+<OutputBlock
+  state="fail"
+  title="The same bundle, with the identity regexp naming a different tool"
+  body={String.raw`
+Error: failed to verify certificate identity: no matching CertificateIdentity found, last error: expected SAN value to match regex "^https://github.com/tui-tools/tui-systemd/\.github/workflows/ci\.yml@refs/tags/v", got "https://github.com/tui-tools/tui-firewall/.github/workflows/ci.yml@refs/tags/v0.2.2"
+`}
+/>
+
+> Proves: that this `checksums.txt`, with all ten asset digests in it, was
+> signed during a run of that repository's release workflow on a tag. Nobody
+> had to hold a key for that to be true, and nobody has a key whose rotation
+> you would have to trust.
+>
+> Does not prove: anything about the files on your disk. At this point you have
+> a checksum list you trust and a download you do not. That is the third check.
+
+## Check three: are the bytes you downloaded the ones that list names?
+
+<CommandDialog
+  title="Check what you downloaded against the file you just verified"
+  command="sha256sum -c --ignore-missing checksums.txt"
+/>
+
+<OutputBlock
+  title="sha256sum -c, with the tarball and the deb in the directory"
+  body={String.raw`
+tui-firewall_0.2.2_amd64.deb: OK
+tui-firewall_0.2.2_linux_amd64.tar.gz: OK
+`}
+/>
+
+`--ignore-missing` is what makes this usable: the list covers all ten assets of
+the release, across two architectures and four package formats, and you are
+almost never holding all of them. Without the flag every asset you did not
+download is reported as a failure and the exit status is useless.
+
+Appending a single byte to the `.deb` is caught here too, and note that the
+untouched tarball still passes, so the report tells you which file is wrong
+rather than just that something is:
+
+<OutputBlock
+  state="fail"
+  title="One byte appended to the deb"
+  body={String.raw`
+tui-firewall_0.2.2_amd64.deb: FAILED
+tui-firewall_0.2.2_linux_amd64.tar.gz: OK
+sha256sum: WARNING: 1 computed checksum did NOT match
+`}
+/>
+
+> Proves: that your copy is byte for byte the file the signed list names.
+>
+> Does not prove, on its own: almost nothing. A checksum taken from the same
+> place as the download only catches corruption and a broken mirror, because
+> whoever could replace the artifact could replace the list beside it. Check
+> two is what turns `checksums.txt` from a convenience into evidence, and that
+> is the whole reason the three run in this order. Check three on its own,
+> which is what a lot of verify instructions amount to, answers a question
+> almost nobody was asking.
+
+## The same three checks run before a package is published
+
+None of this is homework the project leaves to you and does not do itself.
+[pkgs.tui.tools](https://pkgs.tui.tools/), the apt, dnf and pacman repository,
+runs the same gate on every asset of every release it is about to index, before
+the package reaches an index: the sha256 against the release's `checksums.txt`,
+`cosign verify-blob` with the identity pinned to that tool's `ci.yml` on a tag,
+and `gh attestation verify` on the file itself. Any one of them failing rejects
+the package and fails the build. There is no warn-only mode and no flag to skip
+it, and packages are additionally scanned for HIGH and CRITICAL vulnerabilities
+before they go in.
+
+Those checks are about what may enter the repository. They are in addition to
+the repository's GPG signatures, which are what your own machine checks on the
+way out when apt, dnf or pacman installs from it. [What the gate
+checks](/security/#gate) has the full description, and the
+[Security](/security/) page also carries these same three commands as a
+reference card.
+
+## Where to start, for any tool
+
+Every tool's page on this site links its latest release and lists the SHA-256
+of every asset, parsed from that release's own `checksums.txt` at build time,
+so you can compare a digest before downloading anything at all. The same data
+is in [catalog.json](/catalog.json). Start from the tool page, take the release
+it links, and run the three commands above against it.
