@@ -1,4 +1,6 @@
 ---
+import VersionChip from "./VersionChip.astro";
+
 const { tool } = Astro.props;
 
 const shot = tool.screenshots[0];
@@ -39,14 +41,8 @@ const backendHints = (tool.backends ?? [])
         <a href={`/tools/${tool.name}/`}><span class="prefix">tui-</span>{rest}</a>
       </h3>
     </div>
-    <span style="margin-left:auto">
-      {
-        version ? (
-          <span class="chip chip-version">{version}</span>
-        ) : (
-          <span class="chip chip-unreleased">unreleased</span>
-        )
-      }
+    <span class="card-version">
+      <VersionChip tag={version} />
     </span>
   </div>
 

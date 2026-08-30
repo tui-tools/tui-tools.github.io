@@ -114,6 +114,48 @@ const anyReady = managers.some((manager) => manager.ready);
       </div>
     </section>
 
+    <section class="section" style="padding-top:0" id="beta">
+      <div class="panel panel-beta">
+        <div class="section-head" style="margin-bottom:0.75rem">
+          <h2 style="margin:0">Before you install</h2>
+          <span class="chip chip-beta">beta</span>
+        </div>
+        <p style="font-size:0.92rem;color:var(--muted)">
+          The first releases are days old — 29 and 30 August 2026 — and the
+          releases, the signing and the package repository pipeline were all
+          rebuilt this week. Nothing here is settled yet, so read these three
+          before running the commands below.
+        </p>
+        <ul class="beta-notes">
+          <li>
+            <code>tui-tools</code> changed meaning today. It used to be the
+            metapackage that installed everything; it is now the launcher, and
+            it carries an epoch (<code>1:0.1.0</code>) so that
+            <code>apt</code>, <code>dnf</code> and <code>pacman</code> offer it
+            over the older metapackage of the same name. An upgrade on a machine
+            that already had it will replace the metapackage with the launcher.
+          </li>
+          <li>
+            <code>tui-tools-all</code> is the new install-everything package. If
+            what you wanted was the whole family in one command, that is the
+            name to ask for now.
+          </li>
+          <li>
+            The repository signing key may be rotated once more before 1.0.
+            <code>install.sh</code> re-imports the current key each time it runs,
+            so re-running it is the supported way through a rotation; a setup
+            done by hand has to import the new key by hand.
+          </li>
+        </ul>
+        <p style="font-size:0.92rem;color:var(--muted);margin-bottom:0">
+          Until the family is declared stable, package names, flags, keys and
+          key bindings can change without a deprecation period. Pin the versions
+          you depend on, and
+          <a href="https://github.com/tui-tools" rel="noopener">report what breaks</a>.
+        </p>
+      </div>
+    </section>
+
     {
       anyReady && (
         <section class="section" style="padding-top:0" id="script">

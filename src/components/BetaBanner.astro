@@ -1,0 +1,24 @@
+---
+// The site-wide beta notice. It is deliberately plain: one line, no JavaScript,
+// no dismiss button. The family's first releases are days old and its package
+// names, flags and keys are still moving, so a reader who never scrolls should
+// still leave the page knowing that. It goes away when the family is declared
+// stable, and that removal is a 1.0 decision, not a tidy-up.
+//
+// The sentence is canonical: /catalog.json serves it as `family.notice` and the
+// tool READMEs carry it word for word, so it is changed in all of them at once
+// or in none. The banner shows "Beta" as its own tag and the rest as the line,
+// which reads as the same sentence with its first word set apart.
+---
+
+<aside class="beta-banner" aria-label="Project status">
+  <p class="page beta-banner-inner">
+    <span class="beta-banner-tag">Beta:</span>
+    <span
+      >the family is days old and still changing. Package names, flags and keys
+      may move without notice until 1.0. Pin versions, and report what
+      breaks.</span
+    >
+    <a href="/install/#beta">What changed</a>
+  </p>
+</aside>

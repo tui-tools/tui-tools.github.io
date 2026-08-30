@@ -1,0 +1,20 @@
+---
+// The version a tool is at, and the one thing a reader has to know about that
+// version: the family is in beta. Both places that show a version — the grid
+// card and the tool page header — render this, so the beta chip appears next
+// to every version without a single tool being edited.
+const { tag = null } = Astro.props;
+---
+
+{
+  tag ? (
+    <>
+      <span class="chip chip-version">{tag}</span>
+      <span class="chip chip-beta" title="The family is in beta: interfaces may still change.">
+        beta
+      </span>
+    </>
+  ) : (
+    <span class="chip chip-unreleased">unreleased</span>
+  )
+}
