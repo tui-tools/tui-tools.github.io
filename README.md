@@ -134,6 +134,65 @@ Both are generated at build time and neither is committed:
 - **`robots.txt`** is the endpoint `src/pages/robots.txt.js`, which points at
   the sitemap on whatever host `site` names.
 
+## Hosting
+
+The site runs on GitHub Pages today. It is also packaged as a container, so it
+can move to [Quave ONE](https://quave.one) — where the family's analytics
+already run — without a rewrite. Nothing below is switched on yet; it is the
+path, prepared.
+
+### The image
+
+[`Dockerfile`](Dockerfile) is two stages:
+
+1. **`node:22-alpine`** runs `npm ci`, then the same two commands the workflow
+   runs: `npm run catalog` and `astro build`. The container and Pages are
+   therefore built from the same source of truth and cannot drift.
+2. **`nginx:1.29-alpine`** serves `dist/` and nothing else — no Node, no
+   `node_modules`, no token in the shipped image.
+
+Two build arguments:
+
+| Arg | Default | Why |
+| --- | --- | --- |
+| `SITE_URL` | `https://tui.tools` | The canonical host. Feeds `site`, and through it every canonical link, the sitemap and `robots.txt`. |
+| `GITHUB_TOKEN` | empty | Lifts the GitHub API rate limit for the catalog step. |
+
+`GITHUB_TOKEN` is worth spelling out. Without it the catalog script uses the
+anonymous GitHub API, capped at **60 requests per hour per IP** and shared with
+every other anonymous caller behind the same address. One catalog run costs
+roughly three requests per tool plus one for the org listing, which fits today
+and will not once the family grows or the build runs on a shared runner. And the
+script's safety net — *keep the catalog already on disk* — has nothing to keep in
+a fresh container, so a rate-limited build **fails** rather than shipping a
+stale site. Set the token for any build that is not a one-off local one. On
+Quave ONE that means an env var marked **Build** or **Both**, which the platform
+passes in as the `ARG` the Dockerfile declares.
+
+[`nginx.conf`](nginx.conf) is copied in as a *template*: the entrypoint runs
+`envsubst` over it at start-up, so `listen ${PORT}` resolves then. The image
+defaults to `PORT=3000`, which is Quave ONE's default app port — keep the two
+equal. `NGINX_ENVSUBST_FILTER` limits the substitution to `PORT` so nginx's own
+`$uri` survives it. The server block gives `/_astro/` a year (Astro fingerprints
+those names), other images a day, HTML and the SEO files `no-cache`, serves a
+real `404.html` instead of the SPA-style "index.html with a 200", answers
+`/healthz` for the platform probe, and sets the security headers from
+[`security-headers.conf`](security-headers.conf).
+
+Build and check it locally:
+
+```sh
+docker build \
+  --build-arg SITE_URL=https://tui.tools \
+  --build-arg GITHUB_TOKEN="$(gh auth token)" \
+  -t tui-tools-site .
+
+docker run --rm -p 8099:3000 tui-tools-site
+curl -s localhost:8099/ | grep -o '<title>[^<]*</title>'
+curl -s localhost:8099/sitemap-index.xml
+curl -s localhost:8099/robots.txt
+```
+
 ## Local development
 
 ```sh

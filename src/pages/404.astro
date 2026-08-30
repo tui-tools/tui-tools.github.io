@@ -1,0 +1,29 @@
+---
+// Serving a real 404 rather than the grid with a 200 is what both hosts need:
+// GitHub Pages picks up dist/404.html by name, and the nginx image points
+// `error_page 404` at the same file.
+import Base from "../layouts/Base.astro";
+---
+
+<Base
+  title="Not found"
+  description="That page is not part of the tui-tools site."
+>
+  <div class="page">
+    <section class="hero">
+      <div>
+        <p class="eyebrow">404</p>
+        <h1>Nothing here</h1>
+        <p class="lede">
+          That address is not part of this site. A tool that was renamed or
+          never released has no page — the marketplace lists every tool the
+          organization publishes, including the ones still unreleased.
+        </p>
+        <div class="hero-actions">
+          <a class="button button-primary" href="/">Back to the marketplace</a>
+          <a class="button" href="/install/">How to install</a>
+        </div>
+      </div>
+    </section>
+  </div>
+</Base>
