@@ -1,0 +1,208 @@
+---
+title: Transactional updates on a small server
+description: The upgrade runs inside a btrfs snapshot of the root; at reboot two renames swap it in, and rollback is the same two renames backwards. Built, measured and put through a 34-item acceptance list on a Secure Boot VM.
+date: 2026-08-30
+tools:
+  - tui-update
+draft: false
+---
+
+import CommandDialog from "../../components/CommandDialog.astro";
+import OutputBlock from "../../components/OutputBlock.astro";
+
+Every command on this page is the one an Omarchy Server runs, read from the
+overlay it ships. Every number is one that was measured: this mode was built,
+shipped in `omarchy-server` 4.0.1-9, and put through a 34-item acceptance list
+on a Secure Boot VM before any of it was written down. The run, the mechanism
+and what it does not prove are in the
+[transactional-updates report](https://github.com/edimarlnx/omarchy-server/blob/main/reports/2026-08-29-transactional-updates.md),
+which is where the figures below come from and where you can check them without
+taking this page's word for it.
+
+## The problem: an update is a leap you take blind
+
+Updating a machine you can see is a small thing. Updating a headless server on
+the other end of an ssh connection is not, because the moment that decides
+whether it worked is the reboot, and by the time you reach it the old system is
+already gone. A kernel that will not boot, an initramfs missing a module, a
+bootloader entry that points at a subvolume that no longer exists: any of them
+turns `systemctl reboot` into a machine that never comes back, and you find out
+by the ssh connection that does not reopen. On a server with no console and no
+one in front of it, "reboot and hope" is the whole recovery plan.
+
+The usual answers do not fit a small server. A blue/green pair is a second
+machine. An immutable image pipeline is a build system and a registry. What is
+left, on a single VPS, is a snapshot you took beforehand and a rescue procedure
+you have to perform by hand from a serial console you may not have. The point of
+a transactional update is to make that snapshot the update itself, so that the
+safe path is the default one and rollback is not a procedure at all.
+
+## The mechanism: build the new root beside the old one, swap at reboot
+
+The running root is a btrfs subvolume called `@`. A transactional update never
+writes to it. Instead it takes a snapshot of `@`, runs the entire upgrade —
+`pacman -Syu`, the kernel, the initramfs, the bootloader hooks — inside that
+snapshot, and leaves the live root exactly as it was. Nothing you are running is
+touched, because nothing under `@` moved.
+
+The upgrade you would run in place gains one flag:
+
+<CommandDialog
+  title="Update inside a snapshot instead of in place"
+  command="sudo omarchy-server-update run --transactional"
+/>
+
+When that finishes, there are two complete roots on the disk: the one you are
+still running, and the one the upgrade built. Selecting the new one is where
+most designs get complicated, and this one refuses to. It does not repoint the
+bootloader, and it does not change the default subvolume — the kernel command
+line names `rootflags=subvol=@` explicitly, so what boots is whatever is called
+`@`. Making the new root boot is therefore just renaming it to `@`:
+
+```
+@          ->  @prev-<timestamp>     the root that was running
+@tx-<timestamp>   ->  @              the root the upgrade built
+```
+
+Two renames, and nothing else. The kernel command line, the UKI, `/etc/fstab`
+and every pacman hook stay byte for byte what they were — one of the acceptance
+items checks precisely that the booted command line is unchanged. Because the
+boot path does not change, the boot path cannot regress, and under Secure Boot
+the signed chain is untouched: the UKI the transaction built is signed inside
+the snapshot by the machine's own key, and no key ever leaves the machine.
+
+Rollback is the property that makes the whole thing worth it, because it is not
+a new mechanism. It is the same two renames in the other direction:
+
+<CommandDialog
+  title="Boot the previous root again"
+  command="sudo omarchy-server-update rollback"
+/>
+
+`@` becomes `@failed-<timestamp>` and is kept for inspection, `@prev-<timestamp>`
+becomes `@` again, and the machine reboots into the system it was running before
+the update. There is nothing to rebuild, nothing to re-sign and nothing to
+download, which is the point: the operation you need at three in the morning is
+the one that is boring by construction.
+
+This is the exact interface, read from the command the server ships:
+
+<OutputBlock
+  title="omarchy-server-update --help, trimmed to the transactional parts"
+  body={String.raw`
+Usage: omarchy-server-update [run|enable|disable|status|kexec|transactional|rollback] [flags]
+
+  run            update now, non-interactively (default), then restart what changed
+  status         report the mode, whether the timer is enabled and when it next runs
+  transactional  on|off|status -- whether updates build a new root instead of
+                 writing to the running one. The timer reads the same setting.
+  rollback       after a transactional update, boot the previous root again
+
+Mode, overriding the configured default for this run:
+  --transactional  update inside a snapshot of / and swap it in at reboot
+  --in-place       update the running root (the default)
+`}
+/>
+
+## What it guarantees, and what it costs
+
+**A transaction is always a reboot.** That is the trade the mode makes, and it
+is not a limitation to work around — it is the definition. In-place updates on
+this profile classify what they replaced and restart only that, so most of them
+need no reboot at all. A transaction cannot do that, because the change is not
+in the running root: the new root becomes real only when the machine boots into
+it. So the moment of risk that the in-place path spreads across a hundred small
+restarts is collected into a single, reversible reboot. You give up "no reboot"
+and you get "the reboot is the swap, and the swap has an undo".
+
+**A failed upgrade discards cleanly.** Because the upgrade ran inside the
+snapshot, an upgrade that dies partway — a broken package, a hook that exits
+non-zero — takes the snapshot down with it and leaves the live root as if
+nothing had happened. In the acceptance run a transaction was made to fail on
+purpose; afterwards the package it had tried to install was simply not on the
+live root:
+
+<OutputBlock
+  title="After a transaction whose hook failed, the package never reached the live root"
+  body={String.raw`
+error: package 'cowsay' was not found
+`}
+/>
+
+No half-updated state, no partially written `/usr`, and the ESP is byte for byte
+what it was before the failed transaction started. There is no window in which
+the machine is running a mix of old and new.
+
+**The cost is one extra root and a short reboot.** A btrfs snapshot is
+reflinked, so the floor is metadata: the roughly 1.2 MiB a "nothing to upgrade"
+transaction writes is pacman syncing its database, not a copy of the
+filesystem. The honest ceiling for a routine update is a kernel, which stages a
+new `/usr/lib/modules` tree and a fresh UKI. These are the figures measured on
+the VM, each shape run from the same clean filesystem state:
+
+| Transaction | Wall clock | Filesystem used, delta | ESP delta |
+|---|---|---|---|
+| nothing to upgrade | 3 s | +1.2 MiB | 0 |
+| one small package | 3 s | +1.3 MiB | 0 |
+| kernel reinstall (initramfs + UKI + signature) | 8–12 s | +173 MiB | 0 |
+
+The kernel figure is held only while the previous root is retained, and the
+default keep count is one, so the steady-state cost of the mode is a single
+previous root. The ESP does not grow: the pre-transaction bootloader files are
+saved once and overwritten in place, not accumulated. On the VM, the swap
+reboot itself was a 10–11 second boot-id round trip; on real hardware that is
+whatever your firmware's POST costs, not what the mode adds.
+
+One honesty note carried from the report. The two renames are two separate
+syscalls, and btrfs has no atomic rename pair, so for the width of that window
+there is no subvolume called `@`. Losing power inside it drops the next boot
+into the initramfs emergency shell, and the repair is a single line —
+mount `subvolid=5` and rename `@prev-<timestamp>` back to `@`. Every design that
+closes that window trades it for a boot configuration that changes on every
+update, which is a much larger thing to get wrong on a machine nobody logs into.
+
+## Where it fits
+
+**The unattended timer runs the same entry point.** The daily update timer's
+`ExecStart` is `omarchy-server-update run`, which reads its mode from
+`/etc/omarchy-server-update.conf`. So the choice is a setting, not a separate
+command path: turn it on once and every timer-driven update becomes
+transactional too.
+
+<CommandDialog
+  title="Make every update, including the unattended timer, transactional"
+  command="sudo omarchy-server-update transactional on"
+/>
+
+<CommandDialog
+  title="Ask what the machine will do, without changing anything"
+  command="omarchy-server-update status"
+/>
+
+**It is the server end of the same update story [tui-update](/tools/tui-update/)
+tells on the desktop.** `tui-update` reads the pending upgrades off `pacman`,
+`apt` or `dnf` and shows, before anything runs, what the update will cost and
+what has to restart — the kernel and firmware sorted to the top because they are
+what turns an upgrade into a reboot, and whether a `snapper` snapshot can be
+taken first. On Omarchy Server that same reasoning is what the transactional
+mode acts on: the snapshot is not offered, it is the update.
+
+**The path that carries this mode was proven not to change a desktop.** The
+patch series that adds the server update path was measured against an untouched
+reference install, and a desktop built from it installs the same 942 packages,
+byte-for-byte the same boot configuration and the same default target as an
+upstream ISO. The server profile gets transactional updates; the desktop that
+shares the code gets nothing it did not have before. That parity run is in the
+[unattended-update-and-desktop-parity report](https://github.com/edimarlnx/omarchy-server/blob/main/reports/2026-08-29-unattended-update-and-desktop-parity.md).
+
+## What this page does not claim
+
+The run behind it was one QEMU/KVM VM with OVMF firmware and a virtio disk, so
+the wall-clock and reboot numbers are host-dependent — a kernel transaction that
+takes eight seconds with the package already cached is not what a small VPS
+pulling a fresh UKI over its uplink will see. Rollback was proved across a
+kernel reinstall, not across two different kernel versions. SELinux in enforcing
+mode was not exercised through a transaction, and the power-loss window was
+reasoned about rather than induced. Each of those is stated, with its evidence,
+in the report's own limitations — which is the section worth reading before you
+turn this on for a machine you cannot walk up to.
