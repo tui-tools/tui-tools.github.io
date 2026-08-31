@@ -2,6 +2,7 @@
 import Base from "../layouts/Base.astro";
 import CommandDialog from "../components/CommandDialog.astro";
 import catalog from "../data/catalog.json";
+import { versioned, rolling, policy } from "../data/support.js";
 
 const tools = catalog.tools.filter((tool) => !tool.unreleased);
 const anyName = tools[0]?.name ?? "tui-firewall";
@@ -311,6 +312,80 @@ const anyReady = managers.some((manager) => manager.ready);
           ))
         }
       </div>
+    </section>
+
+    <section class="section" style="padding-top:0" id="support">
+      <div class="section-head">
+        <h2>Which releases we support</h2>
+      </div>
+      <p class="lede" style="max-width:62ch">
+        A tool is packaged and tested for a moving window of distributions, not
+        forever. Knowing that window before you install is the difference between
+        a machine that keeps getting upgrades and one that quietly falls off the
+        edge of what the family keeps working.
+      </p>
+
+      <div class="stack" style="margin-top:2rem">
+        <section class="panel" id="support-versioned">
+          <h2>Numbered releases</h2>
+          <p style="font-size:0.9rem;color:var(--muted)">
+            The two most recent stable releases of each, newest first. The older
+            one is dropped when a third release ships and it falls out of the
+            window.
+          </p>
+          <table class="support-table">
+            <thead>
+              <tr>
+                <th scope="col">Distribution</th>
+                <th scope="col">Supported</th>
+                <th scope="col">Previous</th>
+              </tr>
+            </thead>
+            <tbody>
+              {
+                versioned.map((distro) => (
+                  <tr>
+                    <th scope="row">{distro.label}</th>
+                    <td>
+                      <code>{distro.releases[0]}</code>
+                    </td>
+                    <td>
+                      <code>{distro.releases[1]}</code>
+                    </td>
+                  </tr>
+                ))
+              }
+            </tbody>
+          </table>
+        </section>
+
+        <section class="panel" id="support-rolling">
+          <h2>Rolling releases</h2>
+          <p style="font-size:0.9rem;color:var(--muted)">
+            No release number to pin, so the commitment is the current state of
+            the distribution on the day you install.
+          </p>
+          <ul class="beta-notes">
+            {
+              rolling.map((distro) => (
+                <li>
+                  <strong>{distro.label}</strong> — {distro.note}
+                </li>
+              ))
+            }
+          </ul>
+        </section>
+      </div>
+
+      <p class="install-note" style="max-width:62ch;margin-top:1.5rem">
+        {policy}
+      </p>
+      <p class="install-note" style="max-width:62ch">
+        This is the promise: which releases the family keeps working on. It is
+        not a claim that every tool has been run on every one of them. The proof
+        of an actual test run is per tool — each tool's page lists the exact
+        backend versions it passed against, taken from its own release.
+      </p>
     </section>
 
     <section class="section" style="padding-top:0" id="verify">
