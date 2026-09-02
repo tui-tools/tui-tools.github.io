@@ -115,6 +115,38 @@ function entry(tool, site) {
   };
 }
 
+/**
+ * A companion: something the family ships that is not a terminal UI. Same
+ * projection rule as a tool — nothing computed that a page does not also show
+ * — and the same trust rule: the version is what the last build saw, and the
+ * package manager is still the only thing that decides what reaches a machine.
+ */
+function companionEntry(companion, site) {
+  return {
+    name: companion.name,
+    kind: companion.kind,
+    summary: companion.summary,
+    // Only a mirror has an upstream, so a component carries neither key rather
+    // than two nulls a reader has to interpret.
+    ...(companion.kind === "mirror"
+      ? {
+          upstream: companion.upstream ?? "",
+          upstreamVersion: companion.upstreamVersion ?? "",
+        }
+      : {}),
+    // Empty rather than null when nothing has shipped yet: the launcher renders
+    // these straight into a row, and a missing version is a blank, not a word.
+    version: companion.release?.version ?? "",
+    released: companion.release?.publishedAt?.slice(0, 10) ?? "",
+    packages: companion.packages ?? [companion.name],
+    repo: companion.repo,
+    // A companion has no page of its own; the section on the home page is where
+    // a reader is sent, and it is absolute against `site` like every other URL
+    // here, so a preview build points at the preview host.
+    page: new URL("/#companions", site).href,
+  };
+}
+
 export function GET({ site }) {
   // A name that is not `tui-<word>` is not a tool this document describes, and
   // a program reading it should never be handed one to pass to a shell.
@@ -122,6 +154,13 @@ export function GET({ site }) {
     .filter((tool) => NAME.test(tool.name))
     .sort((a, b) => a.name.localeCompare(b.name))
     .map((tool) => entry(tool, site));
+
+  // The non-TUI packages, in their own list so a program that only wants tools
+  // keeps reading `tools` and is never handed a mirror by accident.
+  const companions = (catalog.companions ?? [])
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((companion) => companionEntry(companion, site));
 
   const pkgs = catalog.pkgs ?? { url: "https://pkgs.tui.tools", live: false };
   const lines = repositoryLines(catalog.tools);
@@ -161,6 +200,7 @@ export function GET({ site }) {
       pubkey: `${pkgs.url}/pubkey.asc`,
     },
     tools,
+    companions,
   };
 
   return new Response(`${JSON.stringify(body, null, 2)}\n`, {
