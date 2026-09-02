@@ -26,11 +26,13 @@ const headline = tool.headline ? elide(tool.headline.command) : null;
  * The card says which program the tool drives and the floor it claims — "ufw ≥
  * 0.36" — because that is the one compatibility fact worth knowing before
  * opening the page. A backend with no declared minimum contributes its name
- * alone; a tool that drives nothing contributes nothing.
+ * alone; a tool that drives nothing contributes nothing. Every backend is
+ * listed: a tool that drives three package managers must not look like it
+ * drives two, and the chips wrap.
  */
-const backendHints = (tool.backends ?? [])
-  .map((backend) => (backend.minimum ? `${backend.binary} ≥ ${backend.minimum}` : backend.binary))
-  .slice(0, 2);
+const backendHints = (tool.backends ?? []).map((backend) =>
+  backend.minimum ? `${backend.binary} ≥ ${backend.minimum}` : backend.binary,
+);
 ---
 
 <article class="card">
