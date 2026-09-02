@@ -93,6 +93,15 @@ everything the same three ways, so `scripts/build-catalog.mjs` writes the
 on under the same rule the tools follow — the release attached that kind of
 package, and `pkgs.tui.tools` answers.
 
+The `companions` array in `/catalog.json` is a contract, not only a listing:
+the `tui-tools` launcher reads it and shows a **Companions** group beside the
+tools it can install. Each entry carries `name`, `kind`, `summary`, `version`,
+`released`, `packages`, `repo` and `page`, plus `upstream` and
+`upstreamVersion` for a mirror. `version` and `released` are empty strings
+until the companion has a release, and `page` points at `#companions` on this
+site, since a companion has no page of its own. Renaming or dropping one of
+those keys breaks the launcher.
+
 ### Link previews
 
 A link to this site is mostly shared into somewhere that draws a card — X,

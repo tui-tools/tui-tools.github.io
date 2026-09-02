@@ -121,20 +121,29 @@ function entry(tool, site) {
  * — and the same trust rule: the version is what the last build saw, and the
  * package manager is still the only thing that decides what reaches a machine.
  */
-function companionEntry(companion) {
+function companionEntry(companion, site) {
   return {
     name: companion.name,
     kind: companion.kind,
     summary: companion.summary,
+    // Only a mirror has an upstream, so a component carries neither key rather
+    // than two nulls a reader has to interpret.
+    ...(companion.kind === "mirror"
+      ? {
+          upstream: companion.upstream ?? "",
+          upstreamVersion: companion.upstreamVersion ?? "",
+        }
+      : {}),
+    // Empty rather than null when nothing has shipped yet: the launcher renders
+    // these straight into a row, and a missing version is a blank, not a word.
+    version: companion.release?.version ?? "",
+    released: companion.release?.publishedAt?.slice(0, 10) ?? "",
     packages: companion.packages ?? [companion.name],
-    version: companion.release?.version ?? null,
-    released: companion.release?.publishedAt ?? null,
-    unreleased: companion.unreleased === true,
-    upstream: companion.upstream ?? null,
-    upstream_version: companion.upstreamVersion ?? null,
-    homepage: companion.homepage ?? null,
     repo: companion.repo,
-    changelog: companion.release?.url ?? null,
+    // A companion has no page of its own; the section on the home page is where
+    // a reader is sent, and it is absolute against `site` like every other URL
+    // here, so a preview build points at the preview host.
+    page: new URL("/#companions", site).href,
   };
 }
 
@@ -151,7 +160,7 @@ export function GET({ site }) {
   const companions = (catalog.companions ?? [])
     .slice()
     .sort((a, b) => a.name.localeCompare(b.name))
-    .map(companionEntry);
+    .map((companion) => companionEntry(companion, site));
 
   const pkgs = catalog.pkgs ?? { url: "https://pkgs.tui.tools", live: false };
   const lines = repositoryLines(catalog.tools);
