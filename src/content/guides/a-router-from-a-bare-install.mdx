@@ -1,0 +1,150 @@
+---
+title: A router from a bare install
+description: A fresh router profile boots with no WAN and no LAN and forwards nothing. The roles wizard makes both decisions in two previewed steps, stages a revert before the dangerous one, and the client on the other side comes online on its own.
+date: 2026-09-08
+tools:
+  - tui-router
+  - tui-network
+draft: true
+---
+
+{/*
+  DRAFT. Not published, not built, no URL.
+
+  Before `draft: false`, every dialog below has to be replayed on the router
+  and the transcripts captured: the wizard's two previews, the apply, the
+  disarm, and the client's three reads. The commands here are the documented
+  forms from tui-router's README and the profile's own tooling; the OutputBlocks
+  a published version needs are marked in the text and are deliberately absent
+  rather than approximated.
+*/}
+
+import CommandDialog from "../../components/CommandDialog.astro";
+
+A router is two decisions. Which port faces the internet, and which one faces
+your network. Everything else about the box follows from those two, and until
+they are made a router is not a router at all: it is a machine with two network
+cards, both of them taking a lease, forwarding nothing.
+
+That is deliberately how an [Omarchy
+Server](https://github.com/edimarlnx/omarchy-server) router profile boots.
+`/etc/omarchy/router/roles.conf` exists and assigns neither role, so every port
+takes a DHCP lease and nothing is forwarded. The machine is reachable and it is
+not open, and nobody is locked out of it. Safe mode is a good default and a bad
+resting place, and until recently no tool in the family could leave it.
+
+## The cockpit says what is missing
+
+[tui-router](/tools/tui-router/) is the read-only cockpit for that machine: one
+card per area, refreshed in place, changing nothing itself. Interfaces and their
+WAN and LAN roles, the firewall's posture, the live throughput per interface,
+the DHCP server and its leases, the WireGuard peers, the pending update counts.
+Each read is cheap. Most need no privileges at all, and the few that do, the
+nftables ruleset and the WireGuard dump among them, escalate with `sudo -n`,
+which never prompts. A card that cannot escalate reads unknown with the reason
+rather than taking the whole screen down with it.
+
+On a router profile whose roles are not both assigned, the cockpit says so
+across the top and offers `w`.
+
+<CommandDialog title="Open the cockpit" command="tui-router" tool="tui-router" />
+
+## Step one: the file, before the file is written
+
+The wizard lists every NIC with what can already be seen about it: the name, the
+MAC, the link state and the current address. Nothing is inferred and nothing is
+picked for you. A port that already carries an address from upstream is the
+obvious candidate for WAN and the wizard still makes you say so.
+
+A role here is a set rather than a slot, so several WAN uplinks for failover are
+fine, several LAN ports bridged into `br-lan` are fine, and one port may carry
+both. `m` pins a NIC's role to its MAC instead of its name, which is what makes
+an assignment survive a kernel rename, and it is worth pressing on a machine you
+expect to reinstall.
+
+Then the first preview. It carries three things: a unified diff of `roles.conf`
+as it will be against the file as it is, the output of `omarchy-router-nics
+--preview` run read-only, and the exact `install -m 644` command that writes the
+file. Confirming writes that file through a staged temp file, never a partial
+write, and does nothing else. No unit is rewritten, networkd is not reloaded,
+and the machine is still in safe mode when this step ends.
+
+Splitting the write from the apply is the whole design of the screen. The half
+that can be read carefully is separated from the half that can drop your
+session.
+
+## Step two: the dangerous half, with the revert staged first
+
+The second confirm is danger-colored and it says out loud that an SSH session
+may drop, because rewriting the `.network` units and reloading networkd is
+exactly the kind of change that takes the branch you are sitting on.
+
+Before the apply runs, the wizard stages the previous `roles.conf` as
+`roles.conf.prev` and arms a timed revert with `systemd-run`. Unless
+connectivity is confirmed within 120 seconds, the previous assignment is
+restored and re-applied on its own. Only then does `omarchy-router-nics --apply`
+rewrite the units and reload networkd. Three commands, shown in the order they
+will run, and the staging comes first so that the safety net exists before the
+thing it catches.
+
+If the session held, one more previewed command disarms it:
+
+<CommandDialog
+  title="Disarm the revert once connectivity is confirmed"
+  command="systemctl stop tui-router-roles-revert.service"
+  tool="tui-router"
+/>
+
+If the session did not hold, you wait two minutes and the router comes back on
+the old assignment, which is the case the whole mechanism exists for.
+
+Where `systemd-run` is not available the wizard degrades honestly rather than
+quietly: no automatic revert is armed, and the result screen prints the exact
+manual revert commands instead. That is a worse position to be in and it is
+stated as one.
+
+## What the profile actually wrote
+
+The interesting part of the apply is what a role assignment turns into on disk.
+The LAN role is what starts the DHCP server, and the server is not a package
+anyone installed: it is `systemd-networkd`'s own, switched on by `DHCPServer=yes`
+in the LAN's `.network` unit and configured by that unit's `[DHCPServer]`
+section. The cockpit's DHCP card reads it back as such, naming the unit that
+carries the section, the link it matches, the pool that the unit's `Address=`
+and its `PoolOffset=` and `PoolSize=` work out to, and the leases `networkctl
+status <link>` lists. With nothing on the LAN yet there are no leases, which is
+the correct empty answer rather than a missing card.
+
+The firewall card does not move. The wizard does not touch the firewall behind
+your back, and the ruleset is still the safe-mode one until you say otherwise,
+which is a separate tool and a separate guide.
+
+A tool reporting that a thing is done is still a claim, so the reads worth doing
+next are against the machine rather than against the screen: `networkctl list`
+for the roles, and `systemctl list-units 'tui-router-roles-revert*'` for the
+timer that should no longer exist.
+
+## The other side of the LAN
+
+The proof that a router forwards is a machine that did not have to be told
+anything. A client on the LAN switch, with one card and no second uplink, asks
+and is answered: an address out of the pool the roles wizard set up, a default
+route pointing at the router's LAN address and marked `proto dhcp` because the
+client was told rather than configured, and a resolver that came from the same
+lease.
+
+<CommandDialog
+  title="What the client can be asked, from the client"
+  command={`ip -br addr
+resolvectl status | head
+curl -sI https://tui.tools | head -1`}
+/>
+
+The last line is the one that covers the whole path: out through the router,
+through the firewall, masqueraded onto the uplink, and back. Nobody typed an
+address on the client, and the box it went through was configured from one
+screen, in two previews, with a revert armed for the half that could have gone
+wrong.
+
+Shaping what that DHCP server hands out is [tui-network](/tools/tui-network/)'s
+job, and it is the next guide.
