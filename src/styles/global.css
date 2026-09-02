@@ -797,6 +797,89 @@ hr {
   color: var(--family);
 }
 
+/* ------------------------------------------------------ companion cards */
+
+/* A companion has no page of its own, so its card carries links instead of
+   covering itself with one. Everything else borrows the tool card's tokens. */
+.companion-lede {
+  max-width: 62ch;
+  margin: -0.9rem 0 1.5rem;
+  color: color-mix(in srgb, var(--fg) 82%, var(--muted));
+}
+
+.companion-card .card-head {
+  padding-bottom: 0.6rem;
+}
+
+.companion-card .card-name {
+  color: var(--fg);
+}
+
+.chip-kind {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--frame));
+}
+
+.chip-kind[data-kind="mirror"] {
+  color: var(--cyan);
+  border-color: color-mix(in srgb, var(--cyan) 35%, var(--frame));
+}
+
+.companion-install {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  border-top: 1px dashed var(--frame);
+  padding-top: 0.7rem;
+}
+
+.companion-command {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
+.companion-command code {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.companion-command .sigil {
+  color: var(--family);
+}
+
+.companion-command .manager {
+  margin-left: auto;
+  white-space: nowrap;
+  font-size: 0.68rem;
+  color: color-mix(in srgb, var(--muted) 80%, var(--panel));
+}
+
+/* Not serving yet is stated, not hidden: the command is still the command. */
+.companion-command[data-soon="true"] .manager {
+  color: var(--soon);
+}
+
+.companion-note {
+  margin: 0.35rem 0 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.companion-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+  margin: 0;
+  font-size: 0.82rem;
+}
+
 /* -------------------------------------------------------------- the hero */
 
 .hero {

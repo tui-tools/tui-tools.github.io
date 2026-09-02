@@ -54,6 +54,45 @@ The schema those manifests are validated against lives in the kit:
 documented in
 [`tui-kit/docs/tool-manifest.md`](https://github.com/tui-tools/tui-kit/blob/main/docs/tool-manifest.md).
 
+### Companions
+
+Not everything the family ships is a terminal UI. A repository that carries a
+`companion.json` instead of a `tool.json` is a **companion**: either a non-TUI
+component we author (`tui-tools-<name>`) or a **mirror**, an upstream project
+rebuilt from source under the family's signing and provenance gate, keeping its
+upstream name (`headscale`). Companions get their own section on the home page,
+below the tools, and their own `companions` list in `/catalog.json`. They are
+never mixed into the tool grid and they have no page of their own.
+
+The manifest is deliberately small. Only the first three fields are required:
+
+| Field | Meaning |
+| --- | --- |
+| `name` | The repository name, which is also the default package name. |
+| `kind` | `mirror` or `component`. Anything else is ignored. |
+| `summary` | One line, shown on the card. |
+| `upstream` | The upstream project's URL. Mirrors only. |
+| `upstreamVersion` | The upstream tag the mirror is built from. Optional. |
+| `homepage` | Where to read more, when it is not the repository. Optional. |
+| `packages` | The package names shipped. Defaults to `[name]`. |
+
+```json
+{
+  "name": "headscale",
+  "kind": "mirror",
+  "summary": "Self-hosted Tailscale control server, rebuilt from the upstream source tag",
+  "upstream": "https://github.com/juanfont/headscale",
+  "upstreamVersion": "v0.29.3",
+  "packages": ["headscale"]
+}
+```
+
+There are no install command lines in it: the family repository installs
+everything the same three ways, so `scripts/build-catalog.mjs` writes the
+`pacman`, `apt` and `dnf` commands from the package names, and turns a channel
+on under the same rule the tools follow — the release attached that kind of
+package, and `pkgs.tui.tools` answers.
+
 ### Link previews
 
 A link to this site is mostly shared into somewhere that draws a card — X,

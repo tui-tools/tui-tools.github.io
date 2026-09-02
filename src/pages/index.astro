@@ -1,10 +1,14 @@
 ---
 import Base from "../layouts/Base.astro";
 import ToolCard from "../components/ToolCard.astro";
+import CompanionCard from "../components/CompanionCard.astro";
 import CommandDialog from "../components/CommandDialog.astro";
 import catalog from "../data/catalog.json";
 
 const tools = catalog.tools;
+// The packages that are not terminal UIs. They keep their own section so a
+// mirror is never mistaken for a tool.
+const companions = catalog.companions ?? [];
 const released = tools.filter((tool) => !tool.unreleased);
 const categories = catalog.categories;
 
@@ -106,6 +110,26 @@ const leadShot =
       </div>
       <p class="empty" id="no-match" hidden>No tool in that category yet.</p>
     </section>
+
+    {
+      companions.length > 0 && (
+        <section class="section" id="companions" style="padding-top:0">
+          <div class="section-head">
+            <h2>Companions</h2>
+          </div>
+          <p class="companion-lede">
+            Packages that are not terminal UIs: components the tools rely on, and
+            upstream projects rebuilt from source under the same signing and
+            provenance gate.
+          </p>
+          <div class="grid">
+            {companions.map((companion) => (
+              <CompanionCard companion={companion} />
+            ))}
+          </div>
+        </section>
+      )
+    }
 
     <section class="section" style="padding-top:0">
       <div class="section-head"><h2>What makes them a family</h2></div>

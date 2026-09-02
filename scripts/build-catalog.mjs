@@ -13,6 +13,12 @@
  * A tool with no release yet is kept, marked unreleased. The site says so
  * rather than hiding it.
  *
+ * The same pass looks for a companion.json, which is how the family ships what
+ * is not a terminal UI: our own non-TUI components, and mirrors of upstream
+ * projects rebuilt from source under the family's signing and provenance gate.
+ * A companion is never a tool and never lands in the tool grid; it gets its own
+ * list in the catalog.
+ *
  * GITHUB_TOKEN lifts the rate limit; without it the script still works, just
  * with the 60-requests-per-hour ceiling GitHub gives anonymous callers.
  */
@@ -409,6 +415,90 @@ async function buildTool(repo, pkgsLive) {
   };
 }
 
+/**
+ * The package managers a companion is installed with, in the same display
+ * order the tool pages use. A companion manifest carries no command lines of
+ * its own — the whole point of the family repository is that the command is
+ * always the same three words — so the site writes them from the package name.
+ */
+const COMPANION_MANAGERS = [
+  ["pacman", "Arch Linux", "pacman", (pkg) => `sudo pacman -S ${pkg}`],
+  ["apt", "Debian / Ubuntu", "apt", (pkg) => `sudo apt install ${pkg}`],
+  ["dnf", "Fedora / RHEL", "dnf", (pkg) => `sudo dnf install ${pkg}`],
+];
+
+/**
+ * One install line per package manager. A channel is installable under the
+ * same rule the tools follow: this release actually attached that kind of
+ * package, and the repository serving it answers. Otherwise the command is
+ * still shown, marked as not serving yet.
+ */
+function buildCompanionInstall(packages, release, pkgsLive) {
+  const assetNames = (release?.assets ?? []).map((asset) => asset.name);
+  return COMPANION_MANAGERS.map(([id, label, manager, write]) => {
+    const packaged = assetNames.some((name) => name.endsWith(PACKAGE_SUFFIX[id]));
+    return {
+      id,
+      label,
+      manager,
+      packaged,
+      available: pkgsLive && packaged,
+      command: write(packages.join(" ")),
+    };
+  });
+}
+
+/**
+ * A repository carrying a companion.json: something the family ships that is
+ * not a terminal UI. `kind` says which sort — a `component` we author, or a
+ * `mirror` of an upstream project we rebuild from source. Anything else is
+ * ignored rather than guessed at.
+ */
+async function buildCompanion(repo, pkgsLive) {
+  const response = await rawFile(repo, "companion.json");
+  if (!response) return null;
+
+  const manifest = safeJson(await response.text());
+  if (!manifest || manifest.name !== repo.name) {
+    console.warn(`  ! ${repo.name}: companion.json is unreadable or names another repository`);
+    return null;
+  }
+  if (manifest.kind !== "mirror" && manifest.kind !== "component") {
+    console.warn(`  ! ${repo.name}: companion.json has no usable kind`);
+    return null;
+  }
+
+  console.log(`  + ${repo.name} (companion, ${manifest.kind})`);
+
+  const release = await latestRelease(repo);
+  const packages =
+    Array.isArray(manifest.packages) && manifest.packages.length > 0
+      ? manifest.packages
+      : [manifest.name];
+
+  return {
+    name: manifest.name,
+    kind: manifest.kind,
+    summary: manifest.summary ?? "",
+    upstream: manifest.upstream ?? null,
+    upstreamVersion: manifest.upstreamVersion ?? null,
+    homepage: manifest.homepage ?? null,
+    packages,
+    repo: repo.html_url,
+    stars: repo.stargazers_count ?? 0,
+    install: buildCompanionInstall(packages, release, pkgsLive),
+    release: release
+      ? {
+          tag: release.tag,
+          version: release.version,
+          publishedAt: release.publishedAt,
+          url: release.url,
+        }
+      : null,
+    unreleased: release === null,
+  };
+}
+
 async function main() {
   console.log(`building the catalog from the ${ORG} organization`);
   if (!token) console.log("  (no GITHUB_TOKEN: anonymous rate limits apply)");
@@ -427,9 +517,17 @@ async function main() {
   const pkgsLive = await probePackageRepo(pkgsUrl);
 
   const tools = [];
+  const companions = [];
   for (const repo of repos) {
     const tool = await buildTool(repo, pkgsLive);
-    if (tool) tools.push(tool);
+    if (tool) {
+      tools.push(tool);
+      continue;
+    }
+    // Only a repository that is not a tool can be a companion: the two
+    // manifests are never both read from the same place.
+    const companion = await buildCompanion(repo, pkgsLive);
+    if (companion) companions.push(companion);
   }
 
   // Released tools first, then the rest, alphabetically inside each group, so
@@ -439,17 +537,27 @@ async function main() {
     return a.name.localeCompare(b.name);
   });
 
+  // Released companions first, then alphabetically, the same order the tool
+  // grid uses.
+  companions.sort((a, b) => {
+    if (a.unreleased !== b.unreleased) return a.unreleased ? 1 : -1;
+    return a.name.localeCompare(b.name);
+  });
+
   const catalog = {
     generatedAt: new Date().toISOString(),
     org: ORG,
     pkgs: { url: pkgsUrl, live: pkgsLive },
     tools,
+    companions,
     categories: [...new Set(tools.map((tool) => tool.category))].sort(),
   };
 
   await mkdir(dirname(OUT_JSON), { recursive: true });
   await writeFile(OUT_JSON, `${JSON.stringify(catalog, null, 2)}\n`);
-  console.log(`wrote ${OUT_JSON}: ${tools.length} tools`);
+  console.log(
+    `wrote ${OUT_JSON}: ${tools.length} tools, ${companions.length} companions`,
+  );
   // The sitemap is not written here: `@astrojs/sitemap` derives it from the
   // pages Astro actually renders, against the `site` in astro.config.mjs.
 }

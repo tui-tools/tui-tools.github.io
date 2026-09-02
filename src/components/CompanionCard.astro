@@ -1,0 +1,74 @@
+---
+import VersionChip from "./VersionChip.astro";
+
+/**
+ * A package the family ships that is not a terminal UI: a component the tools
+ * rely on, or an upstream project rebuilt from source under the same signing
+ * and provenance gate. It has no page of its own, so the card carries the
+ * whole story: what it is, which version, how to install it, and where the
+ * source it was built from lives.
+ */
+const { companion } = Astro.props;
+
+const version = companion.release?.tag ?? null;
+const releases = `${companion.repo}/releases`;
+const serving = companion.install.some((entry) => entry.available);
+---
+
+<article class="card companion-card">
+  <div class="card-head">
+    <h3 class="card-name">{companion.name}</h3>
+    <span class="card-version">
+      <VersionChip tag={version} />
+    </span>
+  </div>
+
+  <div class="card-body">
+    <p class="card-tagline">{companion.summary}</p>
+
+    <div class="card-meta">
+      <span class="chip chip-kind" data-kind={companion.kind}>{companion.kind}</span>
+      {
+        companion.upstreamVersion && (
+          <span class="chip">upstream {companion.upstreamVersion}</span>
+        )
+      }
+      {companion.packages.map((name) => <span class="chip">{name}</span>)}
+    </div>
+
+    <div class="companion-install">
+      {
+        companion.install.map((entry) => (
+          <p class="companion-command" data-soon={String(!entry.available)}>
+            <span class="sigil" aria-hidden="true">
+              $
+            </span>
+            <code>{entry.command}</code>
+            <span class="manager">{entry.label}</span>
+          </p>
+        ))
+      }
+      {
+        !serving && (
+          <p class="companion-note">
+            The commands work once the family package repository at{" "}
+            <code>pkgs.tui.tools</code> is serving this package. The{" "}
+            <a href="/install/">one-time setup</a> is the same one the tools use.
+          </p>
+        )
+      }
+    </div>
+
+    <p class="companion-links">
+      <a href={companion.repo} rel="noopener">Source</a>
+      {
+        companion.upstream && (
+          <a href={companion.upstream} rel="noopener">
+            Upstream
+          </a>
+        )
+      }
+      <a href={releases} rel="noopener">Releases</a>
+    </p>
+  </div>
+</article>
