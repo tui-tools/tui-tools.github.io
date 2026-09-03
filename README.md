@@ -280,7 +280,7 @@ what reaches a machine. A reader of this document is choosing what to ask
 ## Hosting
 
 The site runs on GitHub Pages today. It is also packaged as a container, so it
-can move to [Quave ONE](https://quave.one) — where the family's analytics
+can move to [Quave ONE](https://quave.one/?utm_source=github&utm_medium=readme&utm_campaign=tui-tools-site) — where the family's analytics
 already run — without a rewrite. Nothing below is switched on yet; it is the
 path, prepared.
 
@@ -574,7 +574,7 @@ works out `lastmod`.
 ## Analytics
 
 The site counts visits with [Umami](https://umami.is), self-hosted on
-[Quave ONE](https://quave.one). Nothing is sent to Google, and there is no
+[Quave ONE](https://quave.one/?utm_source=github&utm_medium=readme&utm_campaign=tui-tools-site). Nothing is sent to Google, and there is no
 third-party network the numbers feed into.
 
 **What is collected.** A page view: the path, the referrer, the screen size, the

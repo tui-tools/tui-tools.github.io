@@ -4,6 +4,13 @@ import catalog from "../data/catalog.json";
 const tools = catalog.tools;
 const generated = new Date(catalog.generatedAt);
 const stamp = generated.toISOString().replace("T", " ").slice(0, 16);
+// The "Hosted on" badge carries UTM parameters so Quave ONE can tell which
+// page of the family site sent the visitor. No tracking on this side.
+const hostedHref = new URL("https://quave.one/");
+hostedHref.searchParams.set("utm_source", "tui.tools");
+hostedHref.searchParams.set("utm_medium", "footer");
+hostedHref.searchParams.set("utm_campaign", "hosted-by");
+hostedHref.searchParams.set("utm_content", Astro.url.pathname);
 ---
 
 <footer class="footer">
@@ -99,7 +106,7 @@ const stamp = generated.toISOString().replace("T", " ").slice(0, 16);
       <code>tool.json</code> at <span>{stamp} UTC</span>.
     </p>
 
-    <a class="footer-hosted" href="https://quave.one" target="_blank" rel="noopener noreferrer">
+    <a class="footer-hosted" href={hostedHref.href} target="_blank" rel="noopener noreferrer">
       <span>Hosted on</span>
       <img src="/brand/quave-one.svg" alt="Quave ONE" width="96" height="16" />
     </a>
