@@ -4,6 +4,7 @@ import ToolCard from "../components/ToolCard.astro";
 import CompanionCard from "../components/CompanionCard.astro";
 import CommandDialog from "../components/CommandDialog.astro";
 import catalog from "../data/catalog.json";
+import { organization, webSite } from "../lib/jsonld.js";
 
 const tools = catalog.tools;
 // The packages that are not terminal UIs. They keep their own section so a
@@ -28,9 +29,11 @@ const leadShot =
 
 <Base
   title="tui-tools"
+  seoTitle="tui-tools: terminal tools for Linux servers that preview every change"
   description="Terminal tools for Linux that show you the system as it is, and preview the exact command line of every change before running it. One static binary each, no daemon, no state."
   section="tools"
   ogSlug="home"
+  jsonLd={[webSite(), organization()]}
 >
   <div class="page">
     <section class="hero">
