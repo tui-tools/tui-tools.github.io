@@ -9,6 +9,8 @@ import "../styles/global.css";
 import Masthead from "../components/Masthead.astro";
 import BetaBanner from "../components/BetaBanner.astro";
 import Footer from "../components/Footer.astro";
+import { pageTitle } from "../lib/seo.js";
+import { renderJsonLd } from "../lib/jsonld.js";
 
 const {
   title,
@@ -20,10 +22,21 @@ const {
   // which. Anything without a card of its own falls back to the family one,
   // which is true of 404 and of any page added before its card exists.
   ogSlug = "home",
+  // The `<title>` a page wants verbatim, when the default "<title> | tui-tools"
+  // is not the phrase someone would search for. Both the tab and og:title use
+  // it, because a link preview and a search result are read the same way.
+  seoTitle,
+  // Structured data: an array of nodes from src/lib/jsonld.js, or nothing.
+  // A page passes facts it already renders, never a claim it does not make.
+  jsonLd = [],
+  // "article" for a guide, so a preview card and a crawler both read it as a
+  // piece of writing with a date rather than as another site page.
+  ogType = "website",
 } = Astro.props;
 
-const fullTitle = title === "tui-tools" ? title : `${title} · tui-tools`;
-const canonical = new URL(Astro.url.pathname, Astro.site ?? "https://tui-tools.github.io");
+const fullTitle = seoTitle ?? pageTitle(title);
+const structuredData = renderJsonLd(jsonLd);
+const canonical = new URL(Astro.url.pathname, Astro.site ?? "https://tui.tools");
 
 // Absolute, because every scraper that reads these — X, Slack, LinkedIn —
 // treats a relative og:image as a reason to show nothing.
@@ -55,7 +68,7 @@ try {
     <link rel="apple-touch-icon" href="/brand/icon-256.png" />
     <meta name="color-scheme" content="dark" />
     <meta name="theme-color" content="#1a1b26" />
-    <meta property="og:type" content="website" />
+    <meta property="og:type" content={ogType} />
     <meta property="og:site_name" content="tui-tools" />
     <meta property="og:title" content={fullTitle} />
     <meta property="og:description" content={description} />
@@ -68,6 +81,9 @@ try {
     <meta name="twitter:site" content="@edimarlnx" />
     <meta name="twitter:creator" content="@edimarlnx" />
     <meta name="twitter:image" content={ogImage} />
+    {structuredData && (
+      <script type="application/ld+json" is:inline set:html={structuredData} />
+    )}
     <style set:html={accent === "tool" ? ":root { --accent: var(--tool); }" : ""} />
 
     <!-- Umami, self-hosted on Quave ONE. No cookies, no cross-site identifier,

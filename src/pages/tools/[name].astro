@@ -4,6 +4,9 @@ import CommandDialog from "../../components/CommandDialog.astro";
 import VersionChip from "../../components/VersionChip.astro";
 import catalog from "../../data/catalog.json";
 import { renderDescription, renderInline } from "../../lib/markdown.js";
+import { publishedGuides, guideDate, isoDay } from "../../lib/guides.js";
+import { metaDescription, toolIntro, toolTitle } from "../../lib/seo.js";
+import { breadcrumbList, softwareApplication } from "../../lib/jsonld.js";
 
 export function getStaticPaths() {
   return catalog.tools.map((tool) => ({ params: { name: tool.name }, props: { tool } }));
@@ -12,6 +15,34 @@ export function getStaticPaths() {
 const { tool } = Astro.props;
 const rest = tool.name.replace(/^tui-/, "");
 const security = tool.security;
+
+// The search-facing strings, all derived from the catalog: see src/lib/seo.js
+// for why they are generated rather than written per tool.
+const seoTitle = toolTitle(tool);
+const seoDescription = metaDescription(tool);
+// The tagline never says "terminal UI", and no tagline names the program the
+// tool drives; this sentence does both, so the page carries the words a reader
+// actually types into a search box.
+const intro = toolIntro(tool);
+
+// The guides written about this tool. A tool nobody has written about yet gets
+// no empty section, and the list comes from the same publishedGuides() the
+// guides index uses, so a draft can never surface here.
+const guides = (await publishedGuides()).filter((guide) =>
+  guide.data.tools.includes(tool.name),
+);
+
+const structuredData = [
+  softwareApplication({ tool, site: Astro.site, description: seoDescription }),
+  breadcrumbList({
+    site: Astro.site,
+    trail: [
+      { name: "Home", path: "/" },
+      { name: "Tools", path: "/#tools" },
+      { name: tool.name, path: `/tools/${tool.name}/` },
+    ],
+  }),
+];
 
 // A tool that shells out to nothing declares no backends, and then there is no
 // compatibility to talk about: the section is simply absent.
@@ -108,18 +139,20 @@ const checks = [
 
 <Base
   title={tool.name}
-  description={tool.tagline}
+  seoTitle={seoTitle}
+  description={seoDescription}
   accent="tool"
   section="tools"
   ogSlug={tool.name}
-  ogImage={tool.screenshots[0]?.src ?? "/brand/icon-256.png"}
+  jsonLd={structuredData}
 >
   <div class="page">
     <header class="tool-header">
       {tool.icon && <img class="tool-icon" src={tool.icon} alt="" width="64" height="64" />}
       <div style="flex:1 1 18rem">
         <h1><span class="prefix">tui-</span>{rest}</h1>
-        <p>{tool.tagline}</p>
+        <h2 class="tool-tagline">{tool.tagline}</h2>
+        <p class="tool-intro">{intro}</p>
       </div>
       <div class="chips">
         <VersionChip tag={tool.release ? tool.release.tag : null} />
@@ -350,6 +383,44 @@ const checks = [
               </article>
             ))}
           </div>
+        </section>
+      )
+    }
+
+    {
+      guides.length > 0 && (
+        <section class="section" id="guides" style="padding-top:1rem">
+          <div class="section-head">
+            <h2>Guides</h2>
+          </div>
+          <p class="install-note" style="margin:0 0 1.25rem">
+            Written after the work, from a machine the commands were actually
+            run on. Every guide that mentions {tool.name} is listed here.
+          </p>
+          <ul class="guide-list">
+            {guides.map((guide) => (
+              <li>
+                <article class="card guide-card">
+                  <div class="guide-card-body">
+                    <p class="guide-meta">
+                      <time datetime={isoDay(guideDate(guide))}>
+                        {isoDay(guide.data.date)}
+                      </time>
+                      {guide.data.updated && (
+                        <span class="guide-updated">
+                          updated {isoDay(guide.data.updated)}
+                        </span>
+                      )}
+                    </p>
+                    <h3 class="guide-title">
+                      <a href={`/guides/${guide.id}/`}>{guide.data.title}</a>
+                    </h3>
+                    <p class="guide-blurb">{guide.data.description}</p>
+                  </div>
+                </article>
+              </li>
+            ))}
+          </ul>
         </section>
       )
     }

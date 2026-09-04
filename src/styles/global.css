@@ -1006,9 +1006,31 @@ hr {
   color: var(--family);
 }
 
+/* The tagline is a heading in the markup — it is what the page is about, right
+   under the name — but it must not look like one: same sans face, same weight
+   and same colour the paragraph had before it became an <h2>. */
+.tool-header .tool-tagline {
+  font-family: var(--sans);
+  font-weight: 400;
+  font-size: var(--step-0);
+  line-height: 1.65;
+  letter-spacing: normal;
+  max-width: var(--measure);
+  margin: 0;
+  color: color-mix(in srgb, var(--fg) 85%, var(--muted));
+}
+
 .tool-header p {
   margin: 0;
   color: color-mix(in srgb, var(--fg) 85%, var(--muted));
+}
+
+/* The generated sentence under the tagline: it names the terminal UI and the
+   programs the tool drives, so it is deliberately quieter than the tagline. */
+.tool-header .tool-intro {
+  margin: 0.4rem 0 0;
+  font-size: 0.92rem;
+  color: var(--muted);
 }
 
 .split {

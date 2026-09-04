@@ -8,6 +8,7 @@ import { render } from "astro:content";
 import Base from "../../layouts/Base.astro";
 import { publishedGuides, guideDate, isoDay } from "../../lib/guides.js";
 import catalog from "../../data/catalog.json";
+import { techArticle } from "../../lib/jsonld.js";
 
 export async function getStaticPaths() {
   const guides = await publishedGuides();
@@ -21,13 +22,27 @@ const { Content } = await render(guide);
 // the frontmatter should read as plain text rather than as a link to a 404.
 const known = new Set(catalog.tools.map((tool) => tool.name));
 const tools = guide.data.tools.map((name) => ({ name, known: known.has(name) }));
+
+const url = `/guides/${guide.id}/`;
+const article = techArticle({
+  guide,
+  url,
+  site: Astro.site,
+  published: isoDay(guide.data.date),
+  modified: isoDay(guideDate(guide)),
+  // Only the tools that really exist: the same rule the chips above follow.
+  tools: tools.filter((tool) => tool.known),
+});
 ---
 
 <Base
   title={guide.data.title}
+  seoTitle={`${guide.data.title} | tui-tools guides`}
   description={guide.data.description}
   section="guides"
   ogSlug="guides"
+  ogType="article"
+  jsonLd={[article]}
 >
   <div class="page">
     <article class="guide">

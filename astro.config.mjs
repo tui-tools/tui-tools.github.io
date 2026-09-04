@@ -11,26 +11,31 @@ const ROOT = dirname(fileURLToPath(import.meta.url));
 
 /**
  * A tool's page is only as fresh as its latest release, and that date is
- * already in the catalog — so `lastmod` costs nothing but a lookup. Pages that
- * have no such date (the grid, install, security, kit) get none: an invented
- * `lastmod` is worse than an absent one.
+ * already in the catalog — so `lastmod` costs nothing but a lookup.
+ *
+ * The pages that carry no release date of their own — the grid, install,
+ * security, kit, the guides index — are rebuilt from the catalog every time it
+ * is regenerated, so the catalog's own `generatedAt` is their honest `lastmod`
+ * rather than an invented one. Every URL in the sitemap therefore has one,
+ * which is what a crawler uses to decide what to come back for.
  *
  * The catalog is generated (and gitignored), so a build that runs before it
  * exists still works — it just ships a sitemap without any `lastmod`.
  */
-function releaseDatesByPath() {
+function readCatalog() {
   try {
-    const catalog = JSON.parse(
-      readFileSync(join(ROOT, "src/data/catalog.json"), "utf8"),
-    );
-    return new Map(
-      (catalog.tools ?? [])
-        .filter((tool) => tool.release?.publishedAt)
-        .map((tool) => [`/tools/${tool.name}/`, tool.release.publishedAt]),
-    );
+    return JSON.parse(readFileSync(join(ROOT, "src/data/catalog.json"), "utf8"));
   } catch {
-    return new Map();
+    return null;
   }
+}
+
+function releaseDatesByPath(catalog) {
+  return new Map(
+    (catalog?.tools ?? [])
+      .filter((tool) => tool.release?.publishedAt)
+      .map((tool) => [`/tools/${tool.name}/`, tool.release.publishedAt]),
+  );
 }
 
 /**
@@ -64,8 +69,15 @@ function guideDatesByPath() {
   return entries;
 }
 
+const catalog = readCatalog();
+
+// The day the catalog was built: the fallback for every page whose content is
+// the catalog. A build with no catalog yet has none, and those pages then ship
+// without a `lastmod` exactly as they did before.
+const generatedAt = catalog?.generatedAt ?? null;
+
 const lastmodByPath = new Map([
-  ...releaseDatesByPath(),
+  ...releaseDatesByPath(catalog),
   ...guideDatesByPath(),
 ]);
 
@@ -73,7 +85,7 @@ const lastmodByPath = new Map([
 // path to carry around — and switching to a custom domain later changes only
 // `site`, not a single link in the pages.
 export default defineConfig({
-  site: process.env.SITE_URL ?? "https://tui-tools.github.io",
+  site: process.env.SITE_URL ?? "https://tui.tools",
   output: "static",
   trailingSlash: "always",
   build: {
@@ -90,7 +102,7 @@ export default defineConfig({
     sitemap({
       serialize(item) {
         const path = new URL(item.url).pathname;
-        const lastmod = lastmodByPath.get(path);
+        const lastmod = lastmodByPath.get(path) ?? generatedAt;
         return lastmod ? { ...item, lastmod } : item;
       },
     }),

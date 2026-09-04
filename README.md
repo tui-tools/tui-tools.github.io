@@ -541,6 +541,8 @@ already on disk.
 | `src/pages/catalog.json.js` | `/catalog.json`, the machine-readable catalog described above |
 | `src/components/CommandDialog.astro` | The site's one borrowed idea, below |
 | `src/lib/markdown.js` | The safe markdown subset a manifest's `description` may use |
+| `src/lib/seo.js` | The generated `<title>`, meta description and the tool page's opening sentence, all derived from the catalog |
+| `src/lib/jsonld.js` | The structured data every page publishes: `SoftwareApplication`, `BreadcrumbList`, `WebSite`, `Organization`, `TechArticle` |
 | `src/styles/global.css` | Tokyo Night, and the type rule: the machine speaks in mono, we speak in sans |
 
 ![The install page](docs/screenshots/install.png)
