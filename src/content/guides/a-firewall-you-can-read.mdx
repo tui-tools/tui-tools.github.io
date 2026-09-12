@@ -1,0 +1,150 @@
+---
+title: A firewall you can read
+description: On nftables tui-firewall shows the ruleset as nft sees it, one hooked chain at a time. Adding a rule previews the exact nft command, disabling one keeps its spec and its position, and saving diffs the running table against the file the router loads at boot.
+date: 2026-09-22
+tools:
+  - tui-firewall
+draft: true
+---
+
+{/*
+  DRAFT. Not published, not built, no URL.
+
+  Before `draft: false`: run the add, the disable, the re-enable and the save on
+  the router and capture the previews and the resulting rows. The nft command
+  forms and the saved-file format below are quoted from tui-firewall's README
+  and DESIGN.md; nothing here is a reconstructed transcript.
+*/}
+
+import CommandDialog from "../../components/CommandDialog.astro";
+import OutputBlock from "../../components/OutputBlock.astro";
+
+Most firewall tools show you their own model of a firewall. You add something,
+the tool agrees it was added, and what actually reaches the kernel is somebody
+else's business. That is fine until the day the two disagree, which is always
+the day you are working out why a packet is not arriving. On a machine that runs
+neither ufw nor firewalld,
+[tui-firewall](/tools/tui-firewall/) reads `nft -j list ruleset` and drives
+`nft` itself. What you are looking at is the ruleset, not a translation of it:
+the table is `inet tui`, the rules are the rules, and the counters are live.
+
+<CommandDialog title="Open it on the router" command="tui-firewall" tool="tui-firewall" />
+
+## The screen is built from the ruleset
+
+nftables is not a policy manager, it is the packet path, so the rule list reads
+the way a router's does: the verdict, the interfaces the packet passes between
+as `iifname` and `oifname`, the connection state such as `ct state
+established,related`, the protocol and port, the counter that says whether the
+rule has ever fired, and the comment.
+
+A real ruleset is more than one list, so the tool groups it the way nftables
+does: one view per hooked chain, stepped through with `[` and `]` or picked from
+`v`, then NAT, then the named sets it can use as aliases. A base chain shows its
+policy even when it holds no rules, because the policy is a fact worth seeing.
+
+On a router that came up through the roles wizard, the input chain is the
+readable summary of the machine's exposure: established accepted, invalid
+dropped, loopback allowed, ping allowed, and then whatever holes the profile
+opened on the uplink. The SSH session you are reading it in is one of those
+rows, with a counter that is not zero.
+
+## Adding a rule shows the command, not a summary
+
+`a` opens the form, and it carries the matches a router rule needs that ufw and
+firewalld never expose: inbound and outbound interface, connection state, ICMP
+type, address family, and an alias as the source. A useful rule on a fresh
+router is SSH restricted to the LAN port, a genuinely different statement from
+the hole the uplink already carries. Port 22, protocol tcp, arriving on the LAN
+interface, with a comment, because a rule nobody can explain is a rule nobody
+dares delete.
+
+Then the preview, and this is the whole promise of the family on one screen. Not
+a description of the change: the exact `nft` command that will run, with the
+comment quoted inside it, ready to be read or copied or pasted somewhere else.
+Nothing has run yet.
+
+After it runs the rule is in the chain, last, which is where an appended rule
+goes, with its counter at zero and its comment in the last column. If it needed
+to be higher up, the form's last field takes a position. Every rule is deleted
+by its handle, which `nft -j` carries, because a position shifts the moment
+anything is inserted above it.
+
+## Disabling is where other tools lose your work
+
+There is no per-rule off switch in nftables: a rule is in the ruleset or it is
+not. `D` gives you one anyway, and it is honest about how. The rule comes out of
+the running table with `nft delete rule ... handle H`, and the statement it was
+plus the position it sat at are kept. The row stays in the table, greyed out and
+marked disabled, drawn from that record rather than from the kernel. `D` again
+puts it back with `nft insert rule ... index N`, or appends it if the chain has
+become shorter since.
+
+Only rules the tool holds in full can be disabled, the same refusal `E` makes
+before opening the edit form: a rule with a match shown only as text is refused
+with the reason rather than rewritten with half of itself missing.
+
+## The running table and the boot file are two different things
+
+They are, and the tool never blurs them. `W` serialises the tool's own table
+with `nft list table inet tui`, nft's own text and a valid nft script, and
+installs it with `install -m 644 /dev/stdin <path>`. The confirm dialog shows a
+unified diff against the file as it stands, so what does saving change is
+answered before a byte is written.
+
+On an Omarchy router the path is `/etc/omarchy/router/tui-firewall.nft`, which
+the profile includes at boot; on any other machine it is
+`/etc/nftables.d/tui-firewall.nft`, loaded by the usual include from
+`/etc/nftables.conf`, and the dialog spells that out.
+
+Saving writes the running table, so staged changes not yet applied are not in
+it, and the dialog says so. Disabling never joins a staged batch, because the
+ruleset and the record have to change together, and it offers the save straight
+afterwards. Until then the header says where you stand:
+
+<OutputBlock
+  title="The header fact after a disable"
+  body={String.raw`
+rules: 1 disabled, unsaved (W)
+`}
+/>
+
+The disabled record rides in the same file as comment lines `nft -f` ignores and
+this tool reads back:
+
+<OutputBlock
+  title="The saved file's format, from DESIGN.md"
+  body={String.raw`
+# tui-firewall:spec v2
+table inet tui {
+	…
+}
+# tui-firewall:disabled {"index":2,"expr":["iifname","\"wan0\"","udp","dport","53","counter","drop"],…}
+`}
+/>
+
+The live half is still nft's own listing byte for byte, so the boot path is
+exactly what it was, and a ruleset with nothing disabled writes the same v1 file
+it always did.
+
+## Changing many rules at once, without losing the session
+
+One command at a time is how a remote session dies halfway through, with the box
+in a state that is neither the old ruleset nor the new one. `s` turns staging
+on: changes are collected instead of applied, `S` reviews the pending set, and
+the apply is one `nft -f` transaction, all of the changes or none. The preview
+is the script that goes to nft's standard input, which no single command line
+could show.
+
+The apply is also connectivity-safe. The current ruleset is snapshotted first,
+the batch applies, and a timer starts. `k` says you still have access and the
+batch stays; silence restores the snapshot and puts you back on the ruleset that
+was working. Same shape as the revert the roles wizard arms.
+
+Everything above works with nothing installed:
+
+<CommandDialog
+  title="A sample router ruleset, changing nothing"
+  command="tui-firewall --demo=nftables"
+  tool="tui-firewall"
+/>

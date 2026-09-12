@@ -1,0 +1,163 @@
+---
+title: WireGuard without ever seeing a private key
+description: tui-vpn builds an interface in three previewed steps. The private key is generated inside a root shell into a root-only file, the configuration it writes carries no secret at all, and a peer is nothing but a public key and the addresses it may use.
+date: 2026-09-29
+tools:
+  - tui-vpn
+draft: true
+---
+
+{/*
+  DRAFT. Not published, not built, no URL.
+
+  Before `draft: false`: run the three-step wizard, the peer add and the save on
+  the router, and the wg-quick up on the client, capturing the previews and the
+  peers screen after the handshake. Every command below is the documented form
+  from tui-vpn's README; no output is reconstructed.
+*/}
+
+import CommandDialog from "../../components/CommandDialog.astro";
+
+The awkward part of setting up WireGuard by hand is not the concepts, which are
+small. It is that the setup instructions everybody writes involve a private key
+travelling across a screen, a scrollback buffer, a clipboard and sometimes a
+chat window on its way from where it was made to where it belongs.
+
+[tui-vpn](/tools/tui-vpn/) is built so that it cannot happen. A private key is
+never shown, never typed, and never put on a command line, and a command line is
+worth caring about because it is visible in `ps` to every user on the machine.
+
+<CommandDialog title="Open it on the router" command="tui-vpn" tool="tui-vpn" />
+
+The tool reads the interfaces straight from `wg show all dump`: peers,
+endpoints, the latest handshake, transfer counters, allowed IPs and keepalive.
+On a fresh router there is nothing to read, which is where this starts.
+
+## Three steps, previewed one at a time
+
+`N` on the interfaces screen asks for three things: a name, an address in CIDR
+form, and a listen port, which already carries WireGuard's default. Then three
+previewed commands, and the reason they are three rather than one is that they
+are three different decisions.
+
+Step one is the key pair, and it is worth reading the preview rather than
+confirming past it:
+
+<CommandDialog
+  title="Step one: generate the key pair"
+  command={`sh -c 'umask 077 && wg genkey | tee /etc/wireguard/wg0.key | wg pubkey'`}
+  tool="tui-vpn"
+/>
+
+One root shell. The private key is written straight into a root-only file inside
+that shell and never leaves it. Only the public half comes back, printed so you
+can hand it to peers. The tool is telling you where the secret will live and
+promising not to show it to you, before it makes it.
+
+Step two writes the configuration, and the whole file is on screen. It is fed to
+`install -m 600 /dev/stdin /etc/wireguard/wg0.conf` on standard input, so its
+content never rides an argv either.
+
+What makes that file showable is what is not in it. There is no private key. The
+interface's public key is there, because that is the half meant to be shared,
+and the file carries this line instead:
+
+<CommandDialog
+  title="What the conf carries in place of a secret"
+  command="PostUp = wg set %i private-key /etc/wireguard/wg0.key"
+/>
+
+wg-quick loads the key from its own file at up time. The result is a WireGuard
+configuration you could paste into a ticket, which is not a sentence you get to
+write often.
+
+Step three is `wg-quick up`, and it is optional and separate, because creating
+an interface and bringing it up are two different decisions. Pressing escape
+there leaves the interface created and down.
+
+## A peer is two facts
+
+In WireGuard a peer is exactly a public key and the addresses that key is
+allowed to use, so `a` on the peers screen asks for one line. The tool says the
+important half out loud: a private key is never accepted here. Paste the wrong
+half of a pair and it refuses rather than helpfully proceeding.
+
+Then the exact `wg` command with the public key and the allowed IPs in it, and
+nothing has run yet.
+
+If you end the add-peer line with `psk`, the tool first previews a root shell
+that generates `wg genpsk` into a root-only file, and then previews the
+add-peer command passing `wg` that file's path rather than its contents. The key
+value never appears on a command line or on a screen.
+
+## Saving, and what saving costs
+
+`wg set` mutations are runtime-only. A peer added this way lives in the kernel
+and nowhere else, so after a successful add or remove the tool offers
+`wg-quick save`, and `w` offers it on demand from the interfaces or peers
+screen.
+
+The dialog says what the save costs before you confirm it, which is the part
+worth knowing: it rewrites the conf from the running state, so hand-written
+comments in that file are lost, and wg-quick inlines the private key into the
+file, root-only and mode 600. That is standard wg-quick behaviour rather than
+something the tool chose, and stating it is the difference between a surprise
+and a decision.
+
+## The client side, without typing either key
+
+The client half is a plain wg-quick configuration, and it can be written the
+same way: neither key typed, both read out of files by the shell as it writes,
+so the private key goes from one root-only file straight into another without
+ever crossing a screen.
+
+The client has no tui-vpn on it, so the pair is made by hand, and the shape to
+copy is the one the tool itself previews on the router: a single root shell with
+`umask 077`, the private half landing in a root-only file, the public half the
+only thing that comes back out.
+
+<CommandDialog
+  title="On the client, the same shape the tool previews on the router"
+  command={`sh -c 'umask 077 && wg genkey | tee /etc/wireguard/wg0.key | wg pubkey'`}
+/>
+
+What that prints is the public half, which is the string the router's peer entry
+needs and the only part of the pair that should ever be read aloud. The client's
+own conf then names the router's public key, its endpoint as the LAN address and
+the chosen port, and the address the router allowed it inside the tunnel. Its
+own private key it reads the same way the router's does, from the file, through
+a `PostUp` line, so nothing has to be pasted into it.
+
+<CommandDialog
+  title="Bring the tunnel up on the client"
+  command="sudo wg-quick up wg0"
+/>
+
+wg-quick prints every command it runs as it runs them, and none of them prints a
+key, which is easy to verify by reading the output rather than trusting this
+page.
+
+## What to check when it is up
+
+Back on the router, the peers screen shows the handshake age moving from never
+to a number of seconds, and the transfer counters climbing. Those are the two
+facts that distinguish a tunnel that exists from a tunnel that works, and both
+come from `wg show all dump` rather than from anything the tool remembers.
+
+Worth doing at the same time, in another terminal, is confirming the two files
+that hold secrets are the only ones that do: `/etc/wireguard/wg0.key` and, after
+a save, `/etc/wireguard/wg0.conf`, both mode 600 and root-owned. Nothing else
+the tool wrote contains key material, which is also what makes a router backup
+exportable: [tui-router](/tools/tui-router/)'s export strips WireGuard key
+material and references it by path instead.
+
+The whole flow runs against a fake WireGuard with nothing installed:
+
+<CommandDialog
+  title="Every screen, against a fake backend"
+  command="tui-vpn --demo"
+  tool="tui-vpn"
+/>
+
+Two peers, one mid-handshake and one that has never connected, and every
+mutation builds and previews its real command without running it.

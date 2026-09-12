@@ -1,0 +1,142 @@
+---
+title: Headscale users, pre-auth keys and an identity provider
+description: Two configuration files stop scaling somewhere around the fifth client. The users screen creates users, prints a pre-auth key exactly once and never again, and writes the whole OIDC section with the client secret going to a file the service owns and no screen ever shows.
+date: 2026-10-06
+tools:
+  - tui-vpn
+draft: true
+---
+
+{/*
+  DRAFT. Not published, not built, no URL.
+
+  Before `draft: false`: run the user create, the pre-auth key create and both
+  the S and O flows against the lab headscale, and capture the previews, the
+  panel and the minimal diff. The key shown on camera must be from a disposable
+  machine and already expired. Every command below is the documented form from
+  tui-vpn's README.
+*/}
+
+import CommandDialog from "../../components/CommandDialog.astro";
+
+Plain WireGuard is two configuration files that have to agree with each other.
+That works for one client and stops working somewhere around the fifth, when the
+files stop being a setup and start being a distributed system you maintain by
+hand. What you want then is a control plane. [Headscale](https://headscale.net)
+is a self-hosted one, and [tui-vpn](/tools/tui-vpn/) drives it from the same
+screen as the WireGuard side, under the same rule: preview, confirm, run.
+
+## The panel above the list is the control plane itself
+
+The users screen carries a panel that reads `/etc/headscale/config.yaml` back:
+`server_url`, `listen_addr`, the OIDC issuer and client id, whether a client
+secret is set, the allow lists, and the state of the `headscale` unit with the
+account it runs as. Two of those are not just reported: `S` writes the server
+settings and `O` writes the whole identity section, from that same screen and
+with the same preview and confirm as everything else. The panel answers which
+IdP, at which URL, and whether a secret is set. Never what it is.
+
+## A user is a name
+
+Keys hang off a user, and the machines that join with them hang off the keys, so
+the user comes first and it is nothing but a name. `n` creates one, with the
+command on screen before it runs, and afterwards the list carries one user and
+the id the keys will belong to.
+
+## A pre-auth key, shown exactly once
+
+A pre-auth key is how a machine joins a control plane on its own, without a
+person opening a browser and logging in, which matters when the machine is a
+server in a rack. `n` on the keys screen picks the owning user by id and takes
+three optional words: `reusable`, `ephemeral`, and an expiration such as `30m`,
+`24h` or `7d`, defaulting to `24h`.
+
+<CommandDialog
+  title="The previewed command, as tui-vpn documents it"
+  command="headscale preauthkeys create --user <id> [--reusable] [--ephemeral] --expiration <dur>"
+  tool="tui-vpn"
+/>
+
+Read the warning on this one before confirming, because it is different from
+every other preview in the family. Headscale prints the key exactly once.
+tui-vpn shows it once in the status line with a note saying to copy it now, and
+keeps no copy, on purpose: it is a credential, and a tool that could show it to
+you a second time is a tool that stored it somewhere.
+
+The list keeps showing prefixes only, the way headscale's own CLI does: a
+prefix, reusable or not, used or not, and when it expires is everything you need
+to manage a key and nothing you could authenticate with.
+
+## Server settings, and why the URL is load-bearing
+
+`S` asks for two values and writes them into `/etc/headscale/config.yaml`.
+
+`server_url` is the base URL clients reach the control plane on, and also the
+URL your identity provider redirects a browser back to. The tool warns when it
+is plain `http`, because most IdPs refuse an http redirect URI, and when it
+points at loopback, because a client's browser cannot reach that. It has to be
+reachable from the clients' own networks, which makes browser login a three-tool
+problem: [tui-cert](https://github.com/tui-tools/tui-cert) issues the
+certificate and [tui-firewall](/tools/tui-firewall/) opens the port.
+`listen_addr` is the address headscale binds, loopback when a reverse proxy
+terminates TLS in front of it and `0.0.0.0` when it does not.
+
+The confirm dialog shows a diff of the changed lines and nothing else, then the
+write, then `systemctl restart headscale` as a separate, optional confirm.
+
+## Identity is OIDC, and the tool owns the configuration, not the login
+
+User login is deliberately not in this tool. Identity is OpenID Connect, done in
+the client's own browser against your IdP, and Headscale mirrors the users and
+nodes the IdP authorises. The server exposes no web admin, which is the point of
+the design rather than a gap in it. What tui-vpn owns is the configuration of
+that identity, and `O` writes the whole
+`oidc:` section: issuer URL, client id, client secret, allowed domains, groups
+and users, the scope, which defaults to `openid profile email`,
+`only_start_if_oidc_is_available` and `pkce.enabled`.
+
+Two files are written, and only two. `/etc/headscale/config.yaml` gets every
+OIDC setting except the secret, plus a `client_secret_path` pointing at the
+other one, spliced in place with a `.bak` copy taken first.
+`/etc/headscale/oidc_client_secret` gets the secret and nothing else, mode 600,
+created atomically.
+
+## The secret, and where it never goes
+
+The secret is typed with the echo masked, travels to the exec site on the
+command's standard input rather than on an argv, and is dropped from the tool's
+memory the moment the write command exists, cancelled flows included. It is not
+in the confirm dialog, the status line, the diff or `config.yaml`, and the tool
+will not read it back either. The most it will ever say is that a secret is set.
+Leaving the field empty keeps the one already configured; typing a new one
+replaces it. A secret found sitting inline in `config.yaml`, from an older
+setup, is flagged in the panel and emptied by the next `O`, because headscale
+refuses to start with both a secret and a secret path, and the diff redacts that
+line rather than printing it.
+
+The file is owned by the service rather than by root, which is a detail with a
+real failure behind it: the packages disagree, and a root-only secret file would
+leave a headscale running as its own user unable to read its own credential and
+unable to come back from the restart at the end of the flow. The tool reads
+`systemctl show headscale -p User -p Group` and hands the file to that account
+inside the same previewed `install`.
+
+## Checked before saving, restarted after
+
+The issuer is fetched before the write: `<issuer>/.well-known/openid-configuration`
+with `curl`, from the server itself, which is the machine that will have to
+reach the IdP. A failure is a warning rather than a refusal, because an IdP that
+is down this minute is not a reason to be unable to write down its address.
+
+The diff is minimal by construction: `config.yaml` is not re-serialised, only
+parsed to locate each key and then spliced line by line, so every untouched
+section survives byte for byte. Then the restart, as its own confirm, because a
+configuration change does nothing until the unit that reads it restarts.
+
+All of it runs against a fake Headscale with nothing installed:
+
+<CommandDialog
+  title="Two users, three nodes and a pre-auth key, all fake"
+  command="tui-vpn --demo"
+  tool="tui-vpn"
+/>
