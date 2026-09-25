@@ -39,7 +39,21 @@
  * FRONTMATTER
  *
  *   title        the guide's own title, without the site name
- *   description   one sentence; it is the meta description and the index blurb
+ *   description   one sentence; the page lede and the index blurb, and the meta
+ *                 description too unless seoDescription is set
+ *   seoDescription optional; at most 160 characters, the window a search result
+ *                 shows. When set it is the meta, og: and twitter: description,
+ *                 and `description` stays the longer lede
+ *   seoTitle      optional; a shorter title for the <title> element only, when
+ *                 the full title plus the site suffix would run past what a
+ *                 search result shows. og:title keeps the full title
+ *   cover         optional; a PNG under public/, by its site path (for example
+ *                 /tools/tui-cert/tui-cert-cas.png), composed into the guide's
+ *                 own link preview by scripts/build-og.mjs. Without it the card
+ *                 is text only
+ *   coverCrop     optional; { x, y, width, height } in the cover's own pixels,
+ *                 for a screenshot whose interesting part is a dialog in the
+ *                 middle of an otherwise empty window
  *   date          when it was first published (YYYY-MM-DD)
  *   updated       optional; only when the content changed materially
  *   tools         the tools the guide is about, by name, for cross-linking
@@ -54,6 +68,20 @@ const guides = defineCollection({
   schema: z.object({
     title: z.string(),
     description: z.string(),
+    seoDescription: z.string().max(160).optional(),
+    seoTitle: z.string().max(60).optional(),
+    cover: z
+      .string()
+      .regex(/^\/[\w./-]+\.png$/, "a site path to a PNG under public/")
+      .optional(),
+    coverCrop: z
+      .object({
+        x: z.number().int().nonnegative(),
+        y: z.number().int().nonnegative(),
+        width: z.number().int().positive(),
+        height: z.number().int().positive(),
+      })
+      .optional(),
     date: z.coerce.date(),
     updated: z.coerce.date().optional(),
     tools: z.array(z.string()).default([]),

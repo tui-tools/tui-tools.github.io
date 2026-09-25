@@ -8,7 +8,9 @@ import { render } from "astro:content";
 import Base from "../../layouts/Base.astro";
 import { publishedGuides, guideDate, isoDay } from "../../lib/guides.js";
 import catalog from "../../data/catalog.json";
-import { techArticle } from "../../lib/jsonld.js";
+import { breadcrumbList, techArticle } from "../../lib/jsonld.js";
+import { guideTitle } from "../../lib/seo.js";
+import { ogImageUrl } from "../../lib/og.js";
 
 export async function getStaticPaths() {
   const guides = await publishedGuides();
@@ -24,25 +26,47 @@ const known = new Set(catalog.tools.map((tool) => tool.name));
 const tools = guide.data.tools.map((name) => ({ name, known: known.has(name) }));
 
 const url = `/guides/${guide.id}/`;
+
+// Each guide has its own card, drawn by scripts/build-og.mjs from the same
+// frontmatter; the page and its structured data point at the same URL.
+const ogSlug = `guides/${guide.id}`;
+const ogImage = ogImageUrl({ slug: ogSlug, base: Astro.site });
+
+// The search-facing strings: a short `seoDescription` when the lede is longer
+// than a result shows, and a `<title>` that fits (see guideTitle).
+const seoDescription = guide.data.seoDescription ?? guide.data.description;
+const seoTitle = guideTitle(guide.data);
+
 const article = techArticle({
   guide,
   url,
   site: Astro.site,
+  image: ogImage,
   published: isoDay(guide.data.date),
   modified: isoDay(guideDate(guide)),
   // Only the tools that really exist: the same rule the chips above follow.
   tools: tools.filter((tool) => tool.known),
 });
+const breadcrumbs = breadcrumbList({
+  site: Astro.site,
+  trail: [
+    { name: "Home", path: "/" },
+    { name: "Guides", path: "/guides/" },
+    { name: guide.data.title, path: url },
+  ],
+});
 ---
 
 <Base
   title={guide.data.title}
-  seoTitle={`${guide.data.title} | tui-tools guides`}
-  description={guide.data.description}
+  seoTitle={seoTitle}
+  ogTitle={guide.data.title}
+  description={seoDescription}
   section="guides"
-  ogSlug="guides"
+  ogSlug={ogSlug}
+  ogImageAlt={`${guide.data.title}: a tui-tools guide`}
   ogType="article"
-  jsonLd={[article]}
+  jsonLd={[article, breadcrumbs]}
 >
   <div class="page">
     <article class="guide">

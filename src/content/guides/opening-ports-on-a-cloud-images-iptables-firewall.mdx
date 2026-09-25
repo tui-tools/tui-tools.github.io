@@ -1,6 +1,10 @@
 ---
 title: "Opening ports on a cloud image's iptables firewall"
 description: Many cloud images ship no ufw and no firewalld, just an iptables ruleset whose INPUT chain ends in a REJECT. A rule appended after it never matches. tui-firewall inserts in front of it, persists with a diff, and says when the running rules and the saved ones disagree.
+seoTitle: "Opening ports on an iptables cloud image"
+seoDescription: "Cloud images often end INPUT in a REJECT, so an appended rule never matches. tui-firewall inserts in front of it and persists the change with a diff."
+cover: "/tools/tui-firewall/tui-firewall-iptables-add.png"
+coverCrop: { x: 44, y: 100, width: 866, height: 290 }
 date: 2026-09-25
 tools:
   - tui-firewall

@@ -107,6 +107,46 @@ export function toolTitle({ name, tagline }) {
   return cut.length >= 12 ? `${name}: ${cut}` : `${name} | ${TITLE_SUFFIX}`;
 }
 
+/** The longest `<title>` a guide is allowed before its suffix is shortened. */
+const GUIDE_TITLE_MAX = 65;
+
+/**
+ * A guide's `<title>`: its `seoTitle` when the frontmatter has one, else its
+ * title, followed by the longest suffix that still fits. "| tui-tools guides"
+ * says what the page is; "| tui-tools" is the fallback, and a title that is
+ * long on its own goes out bare rather than cut.
+ */
+export function guideTitle({ title, seoTitle }) {
+  const base = seoTitle ?? title;
+  for (const suffix of [`${TITLE_SUFFIX} guides`, TITLE_SUFFIX]) {
+    const full = `${base} | ${suffix}`;
+    if (full.length <= GUIDE_TITLE_MAX) return full;
+  }
+  return base;
+}
+
+/**
+ * A tool's meta description. A stable tool ends it with "Stable since X.Y.Z.":
+ * a stable release is the one fact a reader deciding whether to run a tool on
+ * a server wants first, and the catalog prose never says it on its own. The
+ * note's length is reserved before the sentences are chosen, so the
+ * description still ends on a whole sentence and stays within the window. If
+ * even the tagline alone leaves no room, the note is dropped rather than
+ * cutting a sentence for it.
+ */
+export function toolDescription(tool) {
+  const stable = tool?.stability === "stable" && Boolean(tool.stableSince);
+  if (!stable) return metaDescription(tool);
+  const note = ` Stable since ${tool.stableSince}.`;
+  const shorter = metaDescription({
+    ...tool,
+    min: DESCRIPTION_MIN - note.length,
+    max: DESCRIPTION_MAX - note.length,
+  });
+  if (shorter.endsWith("…")) return metaDescription(tool);
+  return `${shorter}${note}`;
+}
+
 /** `<page title> | tui-tools`, for every page that is not a tool. */
 export function pageTitle(title, { suffix = TITLE_SUFFIX } = {}) {
   return title === suffix ? title : `${title} | ${suffix}`;
