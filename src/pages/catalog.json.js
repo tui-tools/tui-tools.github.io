@@ -105,6 +105,11 @@ function entry(tool, site) {
     version: tool.release?.version ?? null,
     released: tool.release?.publishedAt ?? null,
     unreleased: tool.unreleased === true,
+    // Where the tool stands against the family's stability bar. Additive, so
+    // `schema` does not move: "beta" or "stable", and the first stable release
+    // (without the leading v) or null while the tool is beta.
+    stability: tool.stability === "stable" ? "stable" : "beta",
+    stableSince: tool.stability === "stable" ? (tool.stableSince ?? null) : null,
     platforms: tool.platforms ?? [],
     license: tool.license,
     backends: (tool.backends ?? []).map((backend) => backend.name),
@@ -174,7 +179,9 @@ export function GET({ site }) {
     // `stable_from` is the release the family is declared stable at; it is null
     // until that decision is made, and the same decision removes the site's
     // beta banner. `notice` is the canonical beta sentence, the same one the banner
-    // shows and the tool READMEs carry, word for word.
+    // shows and the beta tools' READMEs carry, word for word. A single tool can
+    // be stable before the family is: each entry in `tools` says so in its own
+    // `stability` and `stableSince`.
     family: {
       status: "beta",
       stable_from: null,

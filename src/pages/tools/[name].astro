@@ -2,6 +2,7 @@
 import Base from "../../layouts/Base.astro";
 import CommandDialog from "../../components/CommandDialog.astro";
 import VersionChip from "../../components/VersionChip.astro";
+import { isStable } from "../../lib/stability.js";
 import catalog from "../../data/catalog.json";
 import { renderDescription, renderInline } from "../../lib/markdown.js";
 import { publishedGuides, guideDate, isoDay } from "../../lib/guides.js";
@@ -160,7 +161,10 @@ const checks = [
         <p class="tool-intro">{intro}</p>
       </div>
       <div class="chips">
-        <VersionChip tag={tool.release ? tool.release.tag : null} />
+        <VersionChip
+          tag={tool.release ? tool.release.tag : null}
+          stableSince={isStable(tool) ? tool.stableSince : null}
+        />
         <span class="chip chip-category">{tool.category}</span>
         <span class="chip">{tool.license}</span>
       </div>

@@ -3,8 +3,13 @@ import Base from "../layouts/Base.astro";
 import CommandDialog from "../components/CommandDialog.astro";
 import catalog from "../data/catalog.json";
 import { versioned, rolling, policy } from "../data/support.js";
+import { STABILITY_DOC, stableTools } from "../lib/stability.js";
 
 const tools = catalog.tools.filter((tool) => !tool.unreleased);
+
+// The tools already promoted past beta, named from their manifests so this
+// page never lists one by hand.
+const stable = stableTools(catalog);
 const anyName = tools[0]?.name ?? "tui-firewall";
 
 // Whether the package repository actually answers is decided once, at build
@@ -155,6 +160,22 @@ const anyReady = managers.some((manager) => manager.ready);
           you depend on, and{" "}
           <a href="https://github.com/tui-tools" rel="noopener">report what breaks</a>.
         </p>
+        {
+          stable.length > 0 && (
+            <p style="font-size:0.92rem;color:var(--muted);margin:0.75rem 0 0">
+              Most tools are still beta. Stable, with keys, flags and{" "}
+              <code>--check</code> JSON that change only in a major release:{" "}
+              {stable.map((tool, index) => (
+                <>
+                  {index > 0 && ", "}
+                  <a href={`/tools/${tool.name}/`}>{tool.name}</a> since {tool.since}
+                </>
+              ))}
+              .{" "}
+              <a href={STABILITY_DOC} rel="noopener">What stable means</a>.
+            </p>
+          )
+        }
       </div>
     </section>
 
