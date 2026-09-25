@@ -368,7 +368,10 @@ hr {
 .footer-grid {
   display: grid;
   gap: 1.5rem 3rem;
-  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  /* min() lets the track shrink below 15rem: on a narrow screen with large
+     text a fixed 15rem floor was wider than the page and pushed every page
+     sideways. */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
 }
 
 .footer-note {
@@ -1486,6 +1489,10 @@ td .keycap {
   flex-wrap: wrap;
   gap: 0.4rem;
   align-items: center;
+  /* A flex item of the section head: without these it keeps its widest
+     single-row size and the chips never wrap inside the screen. */
+  min-width: 0;
+  max-width: 100%;
 }
 
 .filters button {
@@ -1810,4 +1817,63 @@ td .keycap {
 
 .guide-footer > :last-child {
   margin-bottom: 0;
+}
+
+/* ---------------------------------------------------------- narrow screens */
+
+/* On a phone every row is one column at the container's width, and nothing
+   with a fixed or unbreakable width may set the page's width. One wide element
+   is enough to break the whole page: the mobile browser widens its layout
+   viewport to fit it, and then every section, the filter chips and the card
+   grid included, lays out wider than the screen and gets cut at the right. */
+@media (max-width: 33.999rem) {
+  /* Inline code (a command, a URL, a version) has no spaces to break at, so
+     one long snippet would set the width of the page. It may break anywhere
+     instead; code blocks keep their lines and scroll in their own box. */
+  :not(pre) > code {
+    overflow-wrap: anywhere;
+  }
+
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .section-head > .filters {
+    flex-basis: 100%;
+  }
+
+  .filters button {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .chip {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .card-head > div {
+    min-width: 0;
+  }
+
+  .card-name {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  /* A Markdown table in a guide has no wrapper of its own, so on a phone the
+     table itself becomes the scroll box. Not every engine lets a cell shrink
+     below its longest word, so wrapping alone is not enough. */
+  .prose table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  /* The same for a table outside the prose, through its wrapper. */
+  .table-scroll {
+    max-width: 100%;
+    overflow-x: auto;
+  }
 }
