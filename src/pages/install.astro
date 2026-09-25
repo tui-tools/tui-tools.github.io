@@ -96,7 +96,7 @@ const anyReady = managers.some((manager) => manager.ready);
             anyReady ? (
               <>
                 A tool from this family is installed the way everything else on
-                your machine is: <code>pacman -S</code>,
+                your machine is: <code>pacman -S</code>,{" "}
                 <code>apt install</code>, <code>dnf install</code>. One command
                 adds the repository, and after that upgrades arrive with the
                 rest of your system updates.
@@ -104,8 +104,8 @@ const anyReady = managers.some((manager) => manager.ready);
             ) : (
               <>
                 The family is heading for real distribution packages, so a tool
-                is installed the way everything else on your machine is:
-                <code>pacman -S</code>, <code>apt install</code>,
+                is installed the way everything else on your machine is:{" "}
+                <code>pacman -S</code>, <code>apt install</code>,{" "}
                 <code>dnf install</code>. The releases already carry the
                 packages; the repository serving them is not live yet. What
                 works today is the static binary, and it is one command.
@@ -132,7 +132,7 @@ const anyReady = managers.some((manager) => manager.ready);
           <li>
             <code>tui-tools</code> changed meaning today. It used to be the
             metapackage that installed everything; it is now the launcher, and
-            it carries an epoch (<code>1:0.1.0</code>) so that
+            it carries an epoch (<code>1:0.1.0</code>) so that{" "}
             <code>apt</code>, <code>dnf</code> and <code>pacman</code> offer it
             over the older metapackage of the same name. An upgrade on a machine
             that already had it will replace the metapackage with the launcher.
@@ -143,7 +143,7 @@ const anyReady = managers.some((manager) => manager.ready);
             name to ask for now.
           </li>
           <li>
-            The repository signing key may be rotated once more before 1.0.
+            The repository signing key may be rotated once more before 1.0.{" "}
             <code>install.sh</code> re-imports the current key each time it runs,
             so re-running it is the supported way through a rotation; a setup
             done by hand has to import the new key by hand.
@@ -152,7 +152,7 @@ const anyReady = managers.some((manager) => manager.ready);
         <p style="font-size:0.92rem;color:var(--muted);margin-bottom:0">
           Until the family is declared stable, package names, flags, keys and
           key bindings can change without a deprecation period. Pin the versions
-          you depend on, and
+          you depend on, and{" "}
           <a href="https://github.com/tui-tools" rel="noopener">report what breaks</a>.
         </p>
       </div>
@@ -252,7 +252,7 @@ const anyReady = managers.some((manager) => manager.ready);
           ) : (
             <>
               These are the commands the family is building towards. They are
-              written down now so the shape is public and reviewable; nothing at
+              written down now so the shape is public and reviewable; nothing at{" "}
               <code>{pkgs.url.replace("https://", "")}</code> answers yet, so
               running them today will fail.
             </>
@@ -304,7 +304,7 @@ const anyReady = managers.some((manager) => manager.ready);
               </div>
               {manager.setup && (
                 <p class="install-note">
-                  One setup per machine. After it, every tool in the family is a
+                  One setup per machine. After it, every tool in the family is a{" "}
                   <code>{manager.manager}</code> away, and upgrades come with the
                   rest of your system updates.
                 </p>
@@ -410,18 +410,18 @@ sha256sum -c checksums.txt --ignore-missing`}
         <div class="panel">
           <h2>Signatures</h2>
           <p style="font-size:0.9rem;color:var(--muted)">
-            The tarballs on a GitHub release are <strong>not signed</strong>;
+            The tarballs on a GitHub release are <strong>not signed</strong>;{" "}
             <code>checksums.txt</code> tells you one arrived intact, which is not
             the same as proving who built it.
           </p>
           <p style="font-size:0.9rem;color:var(--muted);margin-bottom:0">
-            The <strong>packages are</strong>. Every <code>.deb</code>,
+            The <strong>packages are</strong>. Every <code>.deb</code>,{" "}
             <code>.rpm</code> and <code>.pkg.tar.zst</code> in the repository is
-            signed by one key, and so is each repository's index — the apt
+            signed by one key, and so is each repository's index — the apt{" "}
             <code>Release</code>, the dnf <code>repomd.xml</code>, the pacman
             database. Your package manager checks all of it before installing,
             which is the real reason to prefer this route over a tarball. The key
-            is at <code>{pkgs.url}/pubkey.asc</code>, and the
+            is at <code>{pkgs.url}/pubkey.asc</code>, and the{" "}
             <a href="/security/">security page</a> has the rest.
           </p>
         </div>

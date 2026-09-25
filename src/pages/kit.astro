@@ -83,7 +83,7 @@ const packages = [
             The family's one promise — the command in the dialog is the command
             that runs — is kept in <code>runner</code>, and only there. A tool
             builds a <code>runner.Command</code>: an argv plus a description. It
-            shows it with <code>ui.Confirm</code>. On yes, it hands
+            shows it with <code>ui.Confirm</code>. On yes, it hands{" "}
             <strong>that same value</strong> back to the runner.
           </p>
           <p>
@@ -94,7 +94,7 @@ const packages = [
           </p>
           <p style="margin-bottom:0">
             <code>runner.Fake</code> is the other half. It records what it was
-            asked to run and answers from a canned table, which is what makes
+            asked to run and answers from a canned table, which is what makes{" "}
             <code>--demo</code> honest and what tests assert against: press a key,
             then check that the fake holds exactly one command with exactly the
             argv the preview showed.
@@ -105,7 +105,7 @@ const packages = [
           <ul style="margin:0;padding-left:1.1rem;display:grid;gap:0.6rem;font-size:0.9rem;color:var(--muted)">
             <li>
               <code>schema/tool.schema.json</code> — the manifest this website is
-              built from, and
+              built from, and{" "}
               <a href="https://github.com/tui-tools/tui-kit/blob/main/docs/tool-manifest.md" rel="noopener">
                 its documentation</a
               >.
@@ -137,7 +137,7 @@ const packages = [
       <div class="section-head"><h2>Adding a tool to the family</h2></div>
       <div class="prose" style="max-width:70ch">
         <p>
-          Press <strong>Use this template</strong> on
+          Press <strong>Use this template</strong> on{" "}
           <a href="https://github.com/tui-tools/tui-template" rel="noopener">tui-template</a>,
           which is a working tool rather than a pile of TODOs. Rename it, replace
           one package with your subject, fill in <code>tool.json</code>, re-render
