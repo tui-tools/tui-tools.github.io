@@ -1,19 +1,21 @@
 ---
 title: WireGuard without ever seeing a private key
-description: tui-vpn builds an interface in three previewed steps. The private key is generated inside a root shell into a root-only file, the configuration it writes carries no secret at all, and a peer is nothing but a public key and the addresses it may use.
+description: tui-wireguard builds an interface one previewed step at a time. The private key is generated inside a root shell into a root-only file, the configuration it writes carries no secret at all, and a peer is nothing but a public key and the addresses it may use.
 date: 2026-09-29
 tools:
-  - tui-vpn
+  - tui-wireguard
 draft: true
 ---
 
 {/*
   DRAFT. Not published, not built, no URL.
 
-  Before `draft: false`: run the three-step wizard, the peer add and the save on
-  the router, and the wg-quick up on the client, capturing the previews and the
-  peers screen after the handshake. Every command below is the documented form
-  from tui-vpn's README; no output is reconstructed.
+  Before `draft: false`: run the wizard (endpoint role, then again as a
+  forwarding server), the peer add and the save on the router with
+  tui-wireguard 0.5, and the wg-quick up on the client, capturing the previews,
+  the interfaces screen with its UDP IN and FORWARD columns, and the peers
+  screen after the handshake. Every command below is the documented form from
+  tui-wireguard's README; no output is reconstructed.
 */}
 
 import CommandDialog from "../../components/CommandDialog.astro";
@@ -23,22 +25,29 @@ small. It is that the setup instructions everybody writes involve a private key
 travelling across a screen, a scrollback buffer, a clipboard and sometimes a
 chat window on its way from where it was made to where it belongs.
 
-[tui-vpn](/tools/tui-vpn/) is built so that it cannot happen. A private key is
-never shown, never typed, and never put on a command line, and a command line is
-worth caring about because it is visible in `ps` to every user on the machine.
+[tui-wireguard](/tools/tui-wireguard/) is built so that it cannot happen. A
+private key is never shown, never typed, and never put on a command line, and a
+command line is worth caring about because it is visible in `ps` to every user
+on the machine. (Up to 0.4 the tool was called tui-vpn and also managed a
+Headscale server; that part now lives in [tui-tailscale](/tools/tui-tailscale/),
+and tui-wireguard is plain WireGuard.)
 
-<CommandDialog title="Open it on the router" command="tui-vpn" tool="tui-vpn" />
+<CommandDialog title="Open it on the router" command="tui-wireguard" tool="tui-wireguard" />
 
 The tool reads the interfaces straight from `wg show all dump`: peers,
 endpoints, the latest handshake, transfer counters, allowed IPs and keepalive.
-On a fresh router there is nothing to read, which is where this starts.
+It also reads the host around them, because a WireGuard interface that is up
+can still be unreachable: for every interface the interfaces screen says
+whether the firewall lets a handshake reach its listen port (UDP IN) and
+whether the host forwards traffic for it (FORWARD). On a fresh router there is
+nothing to read, which is where this starts.
 
-## Three steps, previewed one at a time
+## One decision per preview
 
-`N` on the interfaces screen asks for three things: a name, an address in CIDR
-form, and a listen port, which already carries WireGuard's default. Then three
-previewed commands, and the reason they are three rather than one is that they
-are three different decisions.
+`N` on the interfaces screen asks for four things: a name, an address in CIDR
+form, a listen port, which already carries WireGuard's default, and a role.
+Then a short series of previewed commands, one per decision, each confirmed on
+its own.
 
 Step one is the key pair, and it is worth reading the preview rather than
 confirming past it:
@@ -46,7 +55,7 @@ confirming past it:
 <CommandDialog
   title="Step one: generate the key pair"
   command={`sh -c 'umask 077 && wg genkey | tee /etc/wireguard/wg0.key | wg pubkey'`}
-  tool="tui-vpn"
+  tool="tui-wireguard"
 />
 
 One root shell. The private key is written straight into a root-only file inside
@@ -71,9 +80,57 @@ wg-quick loads the key from its own file at up time. The result is a WireGuard
 configuration you could paste into a ticket, which is not a sentence you get to
 write often.
 
-Step three is `wg-quick up`, and it is optional and separate, because creating
-an interface and bringing it up are two different decisions. Pressing escape
-there leaves the interface created and down.
+Step three only appears when it is needed. If the host firewall does not
+already accept the listen port, the tool offers one more previewed command:
+
+<CommandDialog
+  title="Step three, when the port is closed: open it"
+  command="iptables -I INPUT -p udp --dport 51820 -j ACCEPT"
+  tool="tui-wireguard"
+/>
+
+It is inserted rather than appended because plenty of images end INPUT in
+`-j REJECT`, and a rule after that one never matches. The dialog also says
+plainly that the rule is not persisted: a reboot or a firewall reload drops it.
+When [tui-firewall](/tools/tui-firewall/) is installed, it points you there to
+open the port for good; otherwise it names `netfilter-persistent save`.
+
+The last step is `wg-quick up`, and it is optional and separate, because
+creating an interface and bringing it up are two different decisions. Pressing
+escape there leaves the interface created and down. A down interface has no
+link and no line in `wg show`, so the interfaces screen lists it from its file
+in `/etc/wireguard`, and `u` brings it back.
+
+## Endpoint or forwarding server
+
+The role is the one question that changes what the conf contains. An endpoint
+is reached by its peers and nothing else. A forwarding server is how peers
+reach the networks behind this host, the office LAN in this case, and that
+needs forwarding and NAT that a bare interface does not have.
+
+Choose it and the wizard asks two more things, both with a proposal already
+filled in: which networks to forward for, read from `ip -j route` (the
+networks this host reaches directly, without the default route, host routes,
+link-local and the WireGuard interfaces themselves), and which NIC the traffic
+leaves by, the default route's device. The rules then go into the interface's
+own conf as `PostUp` and `PostDown` lines, so they come and go with the
+interface, and the confirm dialog shows the whole file before it is written:
+
+```ini
+PostUp = sysctl -w net.ipv4.ip_forward=1
+PostUp = iptables -I FORWARD -i %i -o eth0 -d 192.168.10.0/24 -j ACCEPT
+PostUp = iptables -I FORWARD -i eth0 -o %i -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+PostUp = iptables -t nat -I POSTROUTING -s 10.8.0.0/24 -o eth0 -d 192.168.10.0/24 -j MASQUERADE
+PostDown = iptables -D FORWARD -i %i -o eth0 -d 192.168.10.0/24 -j ACCEPT
+PostDown = iptables -D FORWARD -i eth0 -o %i -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+PostDown = iptables -t nat -D POSTROUTING -s 10.8.0.0/24 -o eth0 -d 192.168.10.0/24 -j MASQUERADE
+```
+
+The return path is accepted by connection tracking only, so nothing on the LAN
+can open a connection towards the peers. `ip_forward` is left on at down,
+because something else on the host may rely on it. And the file is still
+showable for the same reason as before: the key stays in its own file, and the
+conf only names the path.
 
 ## A peer is two facts
 
@@ -111,7 +168,7 @@ same way: neither key typed, both read out of files by the shell as it writes,
 so the private key goes from one root-only file straight into another without
 ever crossing a screen.
 
-The client has no tui-vpn on it, so the pair is made by hand, and the shape to
+The client has no tui-wireguard on it, so the pair is made by hand, and the shape to
 copy is the one the tool itself previews on the router: a single root shell with
 `umask 077`, the private half landing in a root-only file, the public half the
 only thing that comes back out.
@@ -142,7 +199,18 @@ page.
 Back on the router, the peers screen shows the handshake age moving from never
 to a number of seconds, and the transfer counters climbing. Those are the two
 facts that distinguish a tunnel that exists from a tunnel that works, and both
-come from `wg show all dump` rather than from anything the tool remembers.
+come from `wg show all dump` rather than from anything the tool remembers. If
+the handshake stays at never, the interfaces screen usually says why: UDP IN
+reads `closed` when the firewall drops the handshake before WireGuard sees it.
+
+The same read is available as JSON for a script or an issue, and like the
+screens it carries no key, no endpoint and no address of the host:
+
+<CommandDialog
+  title="One read of the interfaces and the firewall, as JSON"
+  command="sudo tui-wireguard --check"
+  tool="tui-wireguard"
+/>
 
 Worth doing at the same time, in another terminal, is confirming the two files
 that hold secrets are the only ones that do: `/etc/wireguard/wg0.key` and, after
@@ -155,9 +223,11 @@ The whole flow runs against a fake WireGuard with nothing installed:
 
 <CommandDialog
   title="Every screen, against a fake backend"
-  command="tui-vpn --demo"
-  tool="tui-vpn"
+  command="tui-wireguard --demo"
+  tool="tui-wireguard"
 />
 
-Two peers, one mid-handshake and one that has never connected, and every
-mutation builds and previews its real command without running it.
+One forwarding interface with two peers, one mid-handshake and one that has
+never connected, on a host whose firewall ends INPUT and FORWARD in REJECT with
+the interface's port opened above it. Every mutation builds and previews its
+real command without running it.
