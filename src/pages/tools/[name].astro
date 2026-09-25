@@ -7,6 +7,7 @@ import { renderDescription, renderInline } from "../../lib/markdown.js";
 import { publishedGuides, guideDate, isoDay } from "../../lib/guides.js";
 import { metaDescription, toolIntro, toolTitle } from "../../lib/seo.js";
 import { breadcrumbList, softwareApplication } from "../../lib/jsonld.js";
+import { joinWithOr, upstreamNames } from "../../lib/upstream.js";
 
 export function getStaticPaths() {
   return catalog.tools.map((tool) => ({ params: { name: tool.name }, props: { tool } }));
@@ -47,6 +48,10 @@ const structuredData = [
 // A tool that shells out to nothing declares no backends, and then there is no
 // compatibility to talk about: the section is simply absent.
 const backends = tool.backends ?? [];
+
+// The one-line invitation to the maintainers of the programs above. The
+// template fronts no real project, so it gets none.
+const upstreams = tool.category === "template" ? [] : upstreamNames({ tool });
 
 // The package managers are listed distro-first, but the pane that opens is the
 // first channel that actually works today: a reader should not land on a
@@ -383,6 +388,14 @@ const checks = [
               </article>
             ))}
           </div>
+
+          {upstreams.length > 0 && (
+            <p class="install-note upstream-invite">
+              Maintain {joinWithOr({ names: upstreams })}? You are welcome to
+              help shape this tool.{" "}
+              <a href="/about/#maintainers">About → maintainers</a>
+            </p>
+          )}
         </section>
       )
     }
