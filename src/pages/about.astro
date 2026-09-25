@@ -3,6 +3,12 @@
 // what the tools are, and where to follow the work.
 import Base from "../layouts/Base.astro";
 import { person } from "../lib/jsonld.js";
+import catalog from "../data/catalog.json";
+import { toolsWithUpstreams } from "../lib/upstream.js";
+
+// Which upstream project each tool drives, straight from the catalog, so a new
+// tool or backend shows up in the invitation without touching this page.
+const upstreamTools = toolsWithUpstreams({ tools: catalog.tools });
 
 const quaveHref =
   "https://quave.one/?utm_source=tui.tools&utm_medium=referral&utm_campaign=about";
@@ -42,6 +48,39 @@ const quaveHref =
           <a href="https://x.com/edimarlnx" rel="me noopener">@edimarlnx</a> and on
           GitHub at <a href="https://github.com/tui-tools" rel="noopener">github.com/tui-tools</a>.
         </p>
+      </div>
+    </section>
+
+    <section class="section" id="maintainers" style="padding-top:0;scroll-margin-top:6rem">
+      <div class="prose" style="max-width:62ch">
+        <h2>Maintainers of the projects behind the tools</h2>
+        <p>
+          Every tool here is a terminal UI in front of someone else's project.
+          If you are an official maintainer of one of those projects, you are
+          welcome to contribute to the tool that drives it with pull requests.
+          If you would like to take over or share the maintenance of that tool,
+          get in touch and we can look at making you a maintainer of its
+          repository. The people responsible for a project are the ones best
+          placed to shape the terminal UI in front of it.
+        </p>
+        <p>
+          Reach Edimar on X at{" "}
+          <a href="https://x.com/edimarlnx" rel="noopener">@edimarlnx</a>, or open
+          an issue in the tool's repository labelled <code>upstream</code>. If
+          you cannot set labels there, put the word in the title and it will be
+          added for you.
+        </p>
+        <p>The projects each tool drives:</p>
+        <ul class="upstream-list">
+          {
+            upstreamTools.map((entry) => (
+              <li>
+                <a href={`/tools/${entry.name}/`}>{entry.name}</a>:{" "}
+                {entry.upstreams.join(", ")}
+              </li>
+            ))
+          }
+        </ul>
       </div>
     </section>
   </div>
