@@ -6,7 +6,7 @@ import { isStable } from "../../lib/stability.js";
 import catalog from "../../data/catalog.json";
 import { renderDescription, renderInline } from "../../lib/markdown.js";
 import { publishedGuides, guideDate, isoDay } from "../../lib/guides.js";
-import { metaDescription, toolIntro, toolTitle } from "../../lib/seo.js";
+import { toolDescription, toolIntro, toolTitle } from "../../lib/seo.js";
 import { breadcrumbList, softwareApplication } from "../../lib/jsonld.js";
 import { joinWithOr, upstreamNames } from "../../lib/upstream.js";
 
@@ -21,7 +21,8 @@ const security = tool.security;
 // The search-facing strings, all derived from the catalog: see src/lib/seo.js
 // for why they are generated rather than written per tool.
 const seoTitle = toolTitle(tool);
-const seoDescription = metaDescription(tool);
+// A stable tool says so; see toolDescription.
+const seoDescription = toolDescription(tool);
 // The tagline never says "terminal UI", and no tagline names the program the
 // tool drives; this sentence does both, so the page carries the words a reader
 // actually types into a search box.

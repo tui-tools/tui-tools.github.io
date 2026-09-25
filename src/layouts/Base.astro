@@ -2,15 +2,13 @@
 // The one page shell. `accent` switches the page between the family's green
 // and a tool's blue, which is the same rule the branding uses: green is what
 // every tool shares, blue is what one tool adds.
-import { readFileSync } from "node:fs";
-import { createHash } from "node:crypto";
-import { join } from "node:path";
 import "../styles/global.css";
 import Masthead from "../components/Masthead.astro";
 import BetaBanner from "../components/BetaBanner.astro";
 import Footer from "../components/Footer.astro";
 import { pageTitle } from "../lib/seo.js";
 import { renderJsonLd } from "../lib/jsonld.js";
+import { ogImageUrl } from "../lib/og.js";
 
 const {
   title,
@@ -22,10 +20,18 @@ const {
   // which. Anything without a card of its own falls back to the family one,
   // which is true of 404 and of any page added before its card exists.
   ogSlug = "home",
+  // The alt text of the card. Defaults to the description, which is what a
+  // text-only card says anyway; a card with a screenshot on it can say more.
+  ogImageAlt,
   // The `<title>` a page wants verbatim, when the default "<title> | tui-tools"
   // is not the phrase someone would search for. Both the tab and og:title use
-  // it, because a link preview and a search result are read the same way.
+  // it, because a link preview and a search result are read the same way,
+  // unless the page passes `ogTitle` below.
   seoTitle,
+  // The title a link preview shows, when it should differ from the <title>:
+  // a guide shortens its <title> for search results, but a card has room for
+  // the whole headline.
+  ogTitle,
   // Structured data: an array of nodes from src/lib/jsonld.js, or nothing.
   // A page passes facts it already renders, never a claim it does not make.
   jsonLd = [],
@@ -38,22 +44,10 @@ const fullTitle = seoTitle ?? pageTitle(title);
 const structuredData = renderJsonLd(jsonLd);
 const canonical = new URL(Astro.url.pathname, Astro.site ?? "https://tui.tools");
 
-// Absolute, because every scraper that reads these — X, Slack, LinkedIn —
-// treats a relative og:image as a reason to show nothing.
-// The query string carries a hash of the card's bytes: scrapers cache a preview
-// by the image URL, so a redrawn card would otherwise keep showing the old one
-// until their cache expired. A missing card (built before its PNG exists) gets
-// no version, which is also what the fallback to the family card does.
-const ogImage = new URL(`/og/${ogSlug}.png`, canonical);
-try {
-  // Resolved from the project root, not from this file: at build time Astro
-  // runs the compiled layout from a temporary location, so a path relative
-  // to import.meta.url would point nowhere and silently drop the version.
-  const bytes = readFileSync(join(process.cwd(), "public", "og", `${ogSlug}.png`));
-  ogImage.searchParams.set("v", createHash("sha256").update(bytes).digest("hex").slice(0, 10));
-} catch {
-  // No card on disk: leave the URL unversioned.
-}
+// The card's absolute, content-versioned URL; see src/lib/og.js.
+const ogImage = ogImageUrl({ slug: ogSlug, base: canonical });
+const previewTitle = ogTitle ?? fullTitle;
+const imageAlt = ogImageAlt ?? description;
 ---
 
 <!doctype html>
@@ -70,17 +64,20 @@ try {
     <meta name="theme-color" content="#1a1b26" />
     <meta property="og:type" content={ogType} />
     <meta property="og:site_name" content="tui-tools" />
-    <meta property="og:title" content={fullTitle} />
+    <meta property="og:title" content={previewTitle} />
     <meta property="og:description" content={description} />
     <meta property="og:image" content={ogImage} />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content={description} />
+    <meta property="og:image:alt" content={imageAlt} />
     <meta property="og:url" content={canonical} />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@edimarlnx" />
     <meta name="twitter:creator" content="@edimarlnx" />
+    <meta name="twitter:title" content={previewTitle} />
+    <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogImage} />
+    <meta name="twitter:image:alt" content={imageAlt} />
     {structuredData && (
       <script type="application/ld+json" is:inline set:html={structuredData} />
     )}

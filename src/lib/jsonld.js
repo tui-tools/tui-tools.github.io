@@ -106,21 +106,28 @@ export function breadcrumbList({ trail, site }) {
 
 /**
  * A guide is a TechArticle: it is written from work done on a real machine,
- * and the tools it is about are what it is `about`.
+ * and the tools it is about are what it is `about`. The author is the person
+ * who did the work, the same node /about publishes; the family is the
+ * publisher. `image` is the guide's own link-preview card.
  */
-export function techArticle({ guide, url, published, modified, tools = [], site }) {
+export function techArticle({ guide, url, published, modified, image, tools = [], site }) {
   const node = {
     "@type": "TechArticle",
     headline: guide.data.title,
-    description: guide.data.description,
+    description: guide.data.seoDescription ?? guide.data.description,
     url: absolute(url, site),
     datePublished: published,
-    author: organization(),
+    // Always present: an article that was never updated was last modified
+    // the day it was published.
+    dateModified: modified ?? published,
+    author: person({ site }),
     publisher: organization(),
     inLanguage: "en",
     mainEntityOfPage: { "@type": "WebPage", "@id": absolute(url, site) },
   };
-  if (modified && modified !== published) node.dateModified = modified;
+  if (image) {
+    node.image = { "@type": "ImageObject", url: image, width: 1200, height: 630 };
+  }
   if (tools.length > 0) {
     node.about = tools.map((tool) => ({
       "@type": "SoftwareApplication",

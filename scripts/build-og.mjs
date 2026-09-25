@@ -12,8 +12,12 @@
  * Two kinds of card:
  *
  *   - the family card, for the grid, /install, /guides, /security, /kit and
- *     404, and for every guide, which shares the section's card: the
- *     brand mark, the wordmark, the page's own line, and the domain;
+ *     404: the brand mark, the wordmark, the page's own line, and the domain;
+ *   - a guide card, for /guides/<slug>, drawn into /og/guides/<slug>.png: the
+ *     guide's title, the tools it covers, and, when its frontmatter names a
+ *     `cover`, that screenshot on the right. A guide is what gets shared, so
+ *     one generic "Guides" image for all of them would make every post look
+ *     like the same link;
  *   - a tool card, for /tools/<name>: the prompt-prefixed tool name, the
  *     tagline out of its tool.json, and its first screenshot fitted on the
  *     right — the actual program, not an illustration of it.
@@ -37,10 +41,12 @@ import { fileURLToPath } from "node:url";
 
 import satori from "satori";
 import { Resvg } from "@resvg/resvg-js";
+import yaml from "js-yaml";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const OUT_DIR = join(ROOT, "public/og");
 const CATALOG = join(ROOT, "src/data/catalog.json");
+const GUIDES_DIR = join(ROOT, "src/content/guides");
 
 const WIDTH = 1200;
 const HEIGHT = 630;
@@ -170,6 +176,73 @@ async function toolArtwork({ tool, boxWidth, boxHeight }) {
     width: side,
     height: side,
   };
+}
+
+/**
+ * A guide's cover, fitted into the right-hand frame the same way a tool card
+ * fits its screenshot. `crop` narrows it to one region first, in the source
+ * image's pixels, because a terminal screenshot is often a small dialog in
+ * the middle of an empty window and the card is too small to waste the frame
+ * on the empty part. A cover that is missing or not a PNG leaves the card
+ * text only rather than failing the build: the schema already checked the
+ * path's shape, and a catalog screenshot can vanish when a tool renames one.
+ */
+async function coverArtwork({ path, crop, boxWidth, boxHeight }) {
+  const bytes = await readPublic(path);
+  if (!bytes) return null;
+  const size = pngSize(bytes);
+  if (!size) return null;
+  // The crop is clamped to the image so a stale rectangle degrades to a
+  // smaller region instead of an empty frame.
+  const region = crop
+    ? {
+        x: Math.min(crop.x, size.width - 1),
+        y: Math.min(crop.y, size.height - 1),
+        width: Math.min(crop.width, size.width - crop.x),
+        height: Math.min(crop.height, size.height - crop.y),
+      }
+    : { x: 0, y: 0, width: size.width, height: size.height };
+  const scale = Math.min(boxWidth / region.width, boxHeight / region.height, 1);
+  return {
+    src: dataUri(bytes, "image/png"),
+    // The frame the reader sees.
+    width: Math.round(region.width * scale),
+    height: Math.round(region.height * scale),
+    // The whole image, scaled, and shifted so the region sits in the frame.
+    imageWidth: Math.round(size.width * scale),
+    imageHeight: Math.round(size.height * scale),
+    offsetX: -Math.round(region.x * scale),
+    offsetY: -Math.round(region.y * scale),
+  };
+}
+
+// ------------------------------------------------------------------ guides
+
+/**
+ * The published guides, read straight from their frontmatter. This script
+ * runs before Astro, so the content collection is not available; the fields
+ * it needs are few and the schema in src/content.config.mjs has validated
+ * them by the time the site itself builds. Drafts get no card, for the same
+ * reason they get no page.
+ */
+async function readGuides() {
+  const files = await readdir(GUIDES_DIR).catch(() => []);
+  const guides = [];
+  for (const file of files.filter((name) => name.endsWith(".mdx")).sort()) {
+    const source = await readFile(join(GUIDES_DIR, file), "utf8");
+    const match = source.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+    if (!match) continue;
+    const data = yaml.load(match[1]) ?? {};
+    if (data.draft === true) continue;
+    guides.push({
+      slug: file.replace(/\.mdx$/, ""),
+      title: String(data.title ?? ""),
+      tools: Array.isArray(data.tools) ? data.tools.map(String) : [],
+      cover: typeof data.cover === "string" ? data.cover : null,
+      coverCrop: data.coverCrop ?? null,
+    });
+  }
+  return guides;
 }
 
 // ------------------------------------------------------------------ layout
@@ -389,6 +462,160 @@ function toolCard({ mark, tool, artwork }) {
   );
 }
 
+/** A tool name as a small outlined chip, the way the guide pages show them. */
+function toolChip(name) {
+  return text(name, {
+    display: "flex",
+    padding: "5px 13px",
+    border: `2px solid ${FRAME}`,
+    borderRadius: "999px",
+    background: PANEL,
+    fontFamily: "JetBrains Mono",
+    fontSize: "19px",
+    color: TOOL,
+  });
+}
+
+/**
+ * A guide card: a small brand line saying where this is from, the guide's
+ * own title as the headline, and the tools it covers. With a cover the text
+ * takes the left column and the screenshot the right, like a tool card;
+ * without one the title gets the full width.
+ */
+function guideCard({ mark, guide, artwork }) {
+  const hasArt = Boolean(artwork);
+  const title = guide.title;
+  // Long titles step down a size so they stay within three lines.
+  const titleSize = hasArt
+    ? title.length > 42 ? 44 : 50
+    : title.length > 48 ? 60 : 68;
+
+  const eyebrow = h(
+    "div",
+    {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: "14px",
+        fontFamily: "JetBrains Mono",
+        fontWeight: 700,
+        fontSize: "30px",
+        letterSpacing: "-0.02em",
+      },
+    },
+    mark
+      ? h("img", { src: mark, width: 40, height: 40, style: { display: "flex" } })
+      : null,
+    h(
+      "div",
+      { style: { display: "flex" } },
+      text("tui-", { display: "flex", color: FAMILY }),
+      text("tools", { display: "flex", color: FG }),
+    ),
+    text("/ guides", { display: "flex", color: MUTED, fontWeight: 400 }),
+  );
+
+  const words = h(
+    "div",
+    {
+      style: {
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center",
+        ...(hasArt ? { width: "520px", flexShrink: 0 } : { flexGrow: 1 }),
+      },
+    },
+    eyebrow,
+    // One box per word, so the line breaks only between words: left to
+    // itself the renderer splits "tui-cert" at its hyphen.
+    h(
+      "div",
+      {
+        style: {
+          display: "flex",
+          flexWrap: "wrap",
+          marginTop: "34px",
+          fontWeight: 600,
+          fontSize: `${titleSize}px`,
+          lineHeight: 1.18,
+          letterSpacing: "-0.01em",
+          color: FG,
+          maxWidth: hasArt ? "520px" : "1000px",
+        },
+      },
+      title.split(/\s+/).map((word) =>
+        text(word, { display: "flex", marginRight: `${Math.round(titleSize * 0.26)}px` }),
+      ),
+    ),
+    guide.tools.length > 0
+      ? h(
+          "div",
+          {
+            style: {
+              display: "flex",
+              flexWrap: "wrap",
+              gap: "10px",
+              marginTop: "34px",
+            },
+          },
+          guide.tools.map(toolChip),
+        )
+      : null,
+  );
+
+  return card(
+    [
+      h(
+        "div",
+        { style: { display: "flex", flexGrow: 1, gap: "32px", alignItems: "center" } },
+        words,
+        hasArt
+          ? h(
+              "div",
+              {
+                style: {
+                  display: "flex",
+                  flexGrow: 1,
+                  alignItems: "center",
+                  justifyContent: "center",
+                },
+              },
+              // The frame clips the scaled image to the cropped region.
+              h(
+                "div",
+                {
+                  style: {
+                    display: "flex",
+                    position: "relative",
+                    overflow: "hidden",
+                    width: `${artwork.width}px`,
+                    height: `${artwork.height}px`,
+                    borderRadius: "10px",
+                    border: `1px solid ${FRAME}`,
+                    background: PANEL,
+                  },
+                },
+                h("img", {
+                  src: artwork.src,
+                  width: artwork.imageWidth,
+                  height: artwork.imageHeight,
+                  style: {
+                    display: "flex",
+                    position: "absolute",
+                    left: `${artwork.offsetX}px`,
+                    top: `${artwork.offsetY}px`,
+                  },
+                }),
+              ),
+            )
+          : null,
+      ),
+      footer("guide"),
+    ],
+    { accent: FAMILY },
+  );
+}
+
 // ------------------------------------------------------------------ render
 
 async function renderPng({ element, fonts }) {
@@ -431,7 +658,28 @@ async function main() {
     await writeFile(join(OUT_DIR, `${tool.name}.png`), png);
   }
 
-  const written = (await readdir(OUT_DIR)).length;
+  const guides = await readGuides();
+  await mkdir(join(OUT_DIR, "guides"), { recursive: true });
+  for (const guide of guides) {
+    const artwork = guide.cover
+      ? await coverArtwork({
+          path: guide.cover,
+          crop: guide.coverCrop,
+          boxWidth: 540,
+          boxHeight: 440,
+        })
+      : null;
+    if (guide.cover && !artwork) {
+      console.warn(`  ! guide ${guide.slug}: cover ${guide.cover} not found, text-only card`);
+    }
+    const png = await renderPng({
+      element: guideCard({ mark, guide, artwork }),
+      fonts,
+    });
+    await writeFile(join(OUT_DIR, "guides", `${guide.slug}.png`), png);
+  }
+
+  const written = (await readdir(OUT_DIR)).length - 1 + guides.length;
   console.log(`wrote ${OUT_DIR}: ${written} link previews`);
 }
 

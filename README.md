@@ -110,17 +110,28 @@ Slack, LinkedIn, Discord — and that card is the first look most people get.
 between the catalog and `astro build`:
 
 - `home`, `install`, `guides`, `security` and `kit` get the **family card**:
-  the brand mark, the wordmark, the page's own line, and the domain. Every
-  guide points at the `guides` card, so a new guide needs no new artwork.
+  the brand mark, the wordmark, the page's own line, and the domain.
+- every published guide gets a guide card at `public/og/guides/<slug>.png`:
+  the guide's title, the tools its frontmatter lists, and, when the
+  frontmatter names a `cover` (a PNG under `public/`, optionally narrowed with
+  `coverCrop`), that screenshot on the right. Without a cover the card is text
+  only, so a new guide still needs no new artwork.
 - every tool gets a **tool card**: `>_ tui-<name>`, the tagline out of its
   `tool.json`, and its first screenshot fitted on the right. The screenshot is
   already on disk — the catalog downloaded it a step earlier — so nothing is
   fetched here, and a tool whose manifest has no screenshot falls back to its
   icon.
 
-`Base.astro` takes an `ogSlug` prop and points `og:image` at the matching file,
-absolute, with `twitter:card = summary_large_image`. A page that names no slug
-gets the family card, which is what 404 does.
+`Base.astro` takes an `ogSlug` prop and points `og:image` and `twitter:image`
+at the matching file, absolute and versioned with a hash of its bytes
+(`src/lib/og.js`), with `twitter:card = summary_large_image`. A page that names
+no slug gets the family card, which is what 404 does. A guide also puts its
+card in its TechArticle `image`.
+
+A guide's search strings come from its frontmatter: `seoDescription` (at most
+160 characters) is the meta, og: and twitter: description when the lede is
+longer than a result shows, and `seoTitle` shortens the `<title>` alone; the
+link preview keeps the full title.
 
 satori renders the layout to SVG and `@resvg/resvg-js` rasterises it; both are
 plain npm packages with prebuilt musl binaries, so the `node:22-alpine` build
