@@ -1,0 +1,568 @@
+---
+title: A company tailnet with Keycloak single sign-on
+description: A local CA from tui-cert, Keycloak served over https with a certificate from it, and a Headscale control plane set up with tui-tailscale that admits only the members of one Keycloak group. Run end to end in the family lab and told through the screens it produced, including the login that was refused.
+date: 2026-09-25
+tools:
+  - tui-tailscale
+  - tui-cert
+  - tui-firewall
+draft: false
+---
+
+This is a case, told through the screens of a real run. On 2026-09-25 the path
+below ran end to end in the family lab, on two virtual machines, with
+[tui-tailscale v1.0.1](https://github.com/tui-tools/tui-tailscale/releases/tag/v1.0.1),
+[tui-cert v0.3.1](https://github.com/tui-tools/tui-cert/releases/tag/v0.3.1)
+and [tui-firewall v0.5.0](https://github.com/tui-tools/tui-firewall/releases/tag/v0.5.0),
+against Headscale 0.29.3 from pkgs.tui.tools, Tailscale 1.102.4 and Keycloak
+26.7.4. The control plane was Ubuntu 24.04; the laptop was Omarchy Server
+4.0.1, an Arch-based system.
+
+Every terminal image is a frame the tool drew during the run. The TUIs ran in a
+120 by 34 tmux window, each frame was saved with `tmux capture-pane -e`, and
+[tui-kit v0.4.3](https://github.com/tui-tools/tui-kit/releases/tag/v0.4.3)'s
+`render-screenshots.py --from-ansi` turned it into the image, the same renderer
+the tools' README screenshots come from. Dialog frames are cropped to the rows
+of the dialog; nothing in them is edited. The browser images are screenshots
+from the same run. Secrets appear as placeholders such as `<ADMIN_PASSWORD>`,
+and none of them is in any frame.
+
+## What you end up with
+
+A small company wants its own tailnet. People join from their laptops by
+signing in with their company account, only the members of one group get in,
+nothing depends on a public certificate authority, and nothing skips TLS
+verification.
+
+<div class="table-wrap">
+
+| Piece | Where | What it is |
+| --- | --- | --- |
+| CA `lab-ca` | control plane | a local certificate authority kept by [tui-cert](/tools/tui-cert/); every machine that takes part trusts it |
+| Keycloak | `https://sso.lab.internal:18443` | the identity provider, realm `company`, with a certificate from `lab-ca` |
+| Headscale | `https://vpn.lab.internal:19443` | the control plane, driven by [tui-tailscale](/tools/tui-tailscale/), with its own certificate from `lab-ca` |
+| Group `vpn-users` | in Keycloak | the allow list: `alice` is a member, `bob` is not |
+| `company.internal` | MagicDNS | the names nodes get, such as `laptop.company.internal` |
+
+</div>
+
+The control plane is also the first node and routes a subnet to everyone who
+accepts routes. At the end alice's laptop is on the tailnet, and bob, who has a
+working Keycloak account, is turned away at the browser.
+
+## How the lab differs from a real network
+
+- Both machines are QEMU guests behind separate user-mode NATs. They reach the
+  lab host as `10.0.2.2`, and the host forwards ports 18443 and 19443 into the
+  control plane over ssh. That is why those ports, and why the certificates
+  carry `10.0.2.2`.
+- `sso.lab.internal` and `vpn.lab.internal` are lines in `/etc/hosts` on both
+  guests. On a real network they are records in your internal DNS.
+- UDP does not cross an ssh forward, so the two nodes never connect directly
+  and their traffic goes through a DERP relay. With `41641/udp` reachable,
+  nodes connect directly and the relay is only a fallback.
+- The traffic reaches Headscale through a forward that ends on the guest's
+  loopback, so the host firewall is never in its path. The firewall rules
+  below are the ones a real host needs.
+- The person at the laptop is a headless Chromium driven by a short Playwright
+  script that fills in Keycloak's form. It uses the system trust store and
+  never ignores a certificate error, so it verifies exactly what a person's
+  browser would.
+
+## Part one: the CA and Keycloak
+
+### 1. Create the CA (tui-cert, `5`, then `N`)
+
+On the control plane, after the one-time [repository setup](/install/),
+`sudo apt-get install -y tui-cert`. Screen `5` lists local CAs and `N` creates
+one: the name `lab-ca`, with the key and the ten-year validity left at their
+defaults.
+
+<figure class="shots-main guide-shot">
+  <img src="/guides/a-company-tailnet-with-keycloak-single-sign-on/01-ca-new-form.png" alt="tui-cert&#x27;s form for a new local certificate authority, with the name lab-ca, key ec:prime256v1 and 3650 days of validity" width="981" height="396" style="width:100%" loading="lazy" />
+  <figcaption class="shots-caption"><code>N</code> on screen 5: the new CA form, named lab-ca, ECDSA P-256 for ten years</figcaption>
+</figure>
+
+<figure class="shots-main guide-shot">
+  <img src="/guides/a-company-tailnet-with-keycloak-single-sign-on/02-ca-new-confirm.png" alt="tui-cert&#x27;s confirm dialog for creating the CA lab-ca, listing the files it writes, a warning about the CA key and the openssl commands" width="1134" height="594" style="width:100%" loading="lazy" />
+  <figcaption class="shots-caption">Enter: the preview of the openssl commands that create lab-ca, with pathlen:0 and the key at mode 600</figcaption>
+</figure>
+
+### 2. Issue Keycloak's certificate (`e`)
+
+`e` on `lab-ca` issues a server certificate for `sso.lab.internal`, with
+`10.0.2.2` as a second name. Keycloak runs in a rootful podman container as
+uid 1000, which on this guest is the `lab` account, so `lab:lab` owns the pair
+and the container can read its key.
+
+<figure class="shots-main guide-shot">
+  <img src="/guides/a-company-tailnet-with-keycloak-single-sign-on/03-ca-issue-sso-confirm.png" alt="tui-cert&#x27;s confirm dialog for issuing sso.lab.internal from lab-ca, with the names, the owner and the openssl command lines" width="1143" height="702" style="width:100%" loading="lazy" />
+  <figcaption class="shots-caption"><code>e</code>, then Enter: sso.lab.internal and IP 10.0.2.2, owned by lab:lab, and the note that this machine does not trust lab-ca yet</figcaption>
+</figure>
+
+### 3. Trust the CA on the control plane (`t`)
+
+Headscale will run here and fetch Keycloak's discovery document over https, so
+this machine trusts `lab-ca` too.
+
+<figure class="shots-main guide-shot">
+  <img src="/guides/a-company-tailnet-with-keycloak-single-sign-on/04-ca-trust-confirm.png" alt="tui-cert&#x27;s dialog for trusting lab-ca on Ubuntu, with the fingerprint, the trust store path and the update-ca-certificates command" width="1152" height="504" style="width:100%" loading="lazy" />
+  <figcaption class="shots-caption"><code>t</code> on screen 5: trusting lab-ca through Debian's trust store, and what that means for every program on the machine</figcaption>
+</figure>
+
+<figure class="shots-main guide-shot">
+  <img src="/guides/a-company-tailnet-with-keycloak-single-sign-on/05-ca-trusted.png" alt="tui-cert&#x27;s CA screen showing lab-ca as trusted with one issued certificate" width="1143" height="702" style="width:100%" loading="lazy" />
+  <figcaption class="shots-caption">After <code>y</code>: lab-ca trusted, one certificate issued. The status line still quotes the first line of update-ca-certificates (tui-cert#24)</figcaption>
+</figure>
+
+### 4. Run Keycloak as a quadlet
+
+Keycloak is not a family tool: podman runs it and systemd runs podman through a
+quadlet, `/etc/containers/systemd/keycloak.container`. The certificate pair is mounted read-only, http is off, and
+`--hostname` is the full external URL, so the issuer is the same for the
+browser, Headscale and curl. `dev-file` is Keycloak's embedded database, fine
+for a lab and not for production.
+
+```ini
+# Keycloak for the company tailnet case, run by podman through systemd (quadlet).
+[Unit]
+Description=Keycloak (realm company)
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+ContainerName=keycloak
+Image=quay.io/keycloak/keycloak:26.7.4
+Exec=start --db=dev-file --hostname=https://sso.lab.internal:18443 --https-port=18443 --http-enabled=false --https-certificate-file=/etc/kc-tls/fullchain.pem --https-certificate-key-file=/etc/kc-tls/privkey.pem --health-enabled=true
+PublishPort=18443:18443
+Volume=/etc/tui-cert/issued/sso.lab.internal:/etc/kc-tls:ro
+Volume=keycloak-data:/opt/keycloak/data
+EnvironmentFile=/etc/keycloak/admin.env
+
+[Service]
+Restart=always
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target default.target
+```
+
+```console
+$ sudo install -m 600 /dev/stdin /etc/keycloak/admin.env    # KC_BOOTSTRAP_ADMIN_PASSWORD=<ADMIN_PASSWORD>
+$ sudo install -m 644 /tmp/keycloak.container /etc/containers/systemd/keycloak.container
+$ echo "10.0.2.2 sso.lab.internal vpn.lab.internal" | sudo tee -a /etc/hosts
+$ sudo systemctl daemon-reload && sudo systemctl start keycloak
+```
+
+### 5. The realm, the client and the group
+
+The realm was built with Keycloak's admin REST API and curl; the admin console
+does the same with forms. Realm `company`, group `vpn-users`, user `alice` in
+the group, user `bob` in none, and a confidential client `headscale` for the
+authorization-code flow with the redirect URI
+`https://vpn.lab.internal:19443/oidc/callback`. The client needs one protocol
+mapper, because Keycloak puts group membership in a token only when a mapper
+adds it, and Headscale can only check groups the token claims:
+
+```json
+"protocolMappers": [{
+  "name": "groups",
+  "protocol": "openid-connect",
+  "protocolMapper": "oidc-group-membership-mapper",
+  "config": {
+    "claim.name": "groups",
+    "full.path": "false",
+    "id.token.claim": "true",
+    "access.token.claim": "true",
+    "userinfo.token.claim": "true"
+  }
+}]
+```
+
+The client secret went from the API straight into
+`/etc/keycloak/headscale-client-secret`, mode 600, and was never printed. The
+ID tokens show the difference that decides everything later: alice's carries
+`"groups": ["vpn-users"]`, and bob's has no `groups` claim at all
+(`"groups": null` in the decoded payload).
+
+### 6. The laptop trusts the CA (tui-cert on the laptop, `t`)
+
+The laptop's browser will meet both Keycloak and Headscale, so it trusts
+`lab-ca` first. The CA certificate, never its key, was copied to the laptop and
+its fingerprint compared with the one tui-cert shows on the control plane.
+Before the trust, the laptop refuses Keycloak:
+
+```console
+$ openssl x509 -noout -fingerprint -sha256 -in /etc/tui-cert/ca/lab-ca/ca.crt
+sha256 Fingerprint=B7:A8:BC:75:23:53:86:EA:32:F9:47:C8:B9:8C:F0:6B:A9:85:BC:65:14:0A:CB:38:8A:79:D2:D1:31:BA:27:F7
+$ curl -sS https://sso.lab.internal:18443/realms/company/.well-known/openid-configuration
+curl: (60) SSL certificate OpenSSL verify result: self-signed certificate in certificate chain (19)
+```
+
+<figure class="shots-main guide-shot">
+  <img src="/guides/a-company-tailnet-with-keycloak-single-sign-on/06-client-ca-trust-confirm.png" alt="tui-cert&#x27;s dialog on Omarchy Server for trusting lab-ca with trust anchor --store" width="1152" height="468" style="width:100%" loading="lazy" />
+  <figcaption class="shots-caption"><code>t</code> on the laptop: the same fingerprint, trusted the Arch way with trust anchor</figcaption>
+</figure>
+
+<figure class="shots-main guide-shot">
+  <img src="/guides/a-company-tailnet-with-keycloak-single-sign-on/07-client-ca-trusted.png" alt="tui-cert&#x27;s CA screen on the laptop showing lab-ca (cert only) as trusted" width="1143" height="702" style="width:100%" loading="lazy" />
+  <figcaption class="shots-caption">After <code>y</code>: lab-ca listed as cert only (the key stays on the control plane) and trusted</figcaption>
+</figure>
+
+```console
+$ curl -sS https://sso.lab.internal:18443/realms/company/.well-known/openid-configuration | jq -r .issuer
+https://sso.lab.internal:18443/realms/company
+```
+
+## Part two: Headscale with Keycloak as the identity provider
+
+### 7. Install headscale (tui-tailscale, `3`, then `i`)
+
+`sudo apt-get install -y tui-tailscale` on the control plane, then the users
+screen, `3`. With no `headscale` on the host, the readiness line names the
+first step and the commands it will run. Since 1.0.1 apt runs with
+`DEBIAN_FRONTEND=noninteractive` and `NEEDRESTART_MODE=a`, so the install no
+longer hangs on needrestart ([tui-tailscale#23](https://github.com/tui-tools/tui-tailscale/issues/23), fixed); here it finished in 15 seconds.
+
+<figure class="shots-main guide-shot">
+  <img src="/guides/a-company-tailnet-with-keycloak-single-sign-on/08-headscale-missing.png" alt="tui-tailscale&#x27;s users screen on Ubuntu saying headscale is not installed and listing the apt commands that install it" width="1134" height="720" style="width:100%" loading="lazy" />
+  <figcaption class="shots-caption"><code>3</code>: the users screen with no headscale, and the noninteractive apt commands <code>i</code> will run</figcaption>
+</figure>
+
+<figure class="shots-main guide-shot">
+  <img src="/guides/a-company-tailnet-with-keycloak-single-sign-on/09-headscale-install-confirm.png" alt="tui-tailscale&#x27;s confirm dialog for installing headscale with apt-get" width="1134" height="414" style="width:100%" loading="lazy" />
+  <figcaption class="shots-caption"><code>i</code>: the install preview, from the tui-tools repository</figcaption>
+</figure>
+
+<figure class="shots-main guide-shot">
+  <img src="/guides/a-company-tailnet-with-keycloak-single-sign-on/10-headscale-installed.png" alt="tui-tailscale&#x27;s control-plane panel after installing headscale, with the next step, the config values and the relays line" width="1170" height="720" style="width:100%" loading="lazy" />
+  <figcaption class="shots-caption">After <code>y</code>: the control-plane panel, next step <code>S</code>. The relays line says this tailnet relays through Tailscale's public DERP servers (tui-tailscale#27, fixed)</figcaption>
+</figure>
+
+### 8. Issue Headscale's certificate (tui-cert, `e`)
+
+Back in tui-cert, `e` on `lab-ca` again for `vpn.lab.internal` and
+`10.0.2.2`, owned by `headscale:headscale`. The package created that account,
+which is why headscale was installed first.
+
+<figure class="shots-main guide-shot">
+  <img src="/guides/a-company-tailnet-with-keycloak-single-sign-on/11-ca-issue-vpn-form.png" alt="tui-cert&#x27;s form for issuing a server certificate for vpn.lab.internal, owned by headscale:headscale" width="981" height="486" style="width:100%" loading="lazy" />
+  <figcaption class="shots-caption"><code>e</code>: vpn.lab.internal with IP 10.0.2.2, owner headscale:headscale</figcaption>
+</figure>
+
+### 9. Serve it with its own certificate (`S`)
+
+`S` asks for the transport first, then `server_url`, then offers the pairs
+tui-cert issued on this machine instead of asking for paths.
+
+<figure class="shots-main guide-shot">
+  <img src="/guides/a-company-tailnet-with-keycloak-single-sign-on/12-server-transport.png" alt="tui-tailscale&#x27;s server settings picker with own certificate selected among plain http, Let&#x27;s Encrypt and reverse proxy" width="936" height="324" style="width:100%" loading="lazy" />
+  <figcaption class="shots-caption"><code>S</code>: the transport, own certificate</figcaption>
+</figure>
+
+<figure class="shots-main guide-shot">
+  <img src="/guides/a-company-tailnet-with-keycloak-single-sign-on/13-server-url.png" alt="tui-tailscale&#x27;s server_url step with https://vpn.lab.internal:19443 typed in" width="954" height="342" style="width:100%" loading="lazy" />
+  <figcaption class="shots-caption">server_url https://vpn.lab.internal:19443, which is also where the IdP sends the browser back</figcaption>
+</figure>
+
+<figure class="shots-main guide-shot">
+  <img src="/guides/a-company-tailnet-with-keycloak-single-sign-on/14-server-cert-pick.png" alt="tui-tailscale&#x27;s list of certificate pairs issued by lab-ca, with vpn.lab.internal selected" width="972" height="306" style="width:100%" loading="lazy" />
+  <figcaption class="shots-caption">The pairs lab-ca issued, by name; the vpn.lab.internal pair picked</figcaption>
+</figure>
+
+The diff shows only the lines that change. Since tui-kit v0.4.2 it keeps their
+indentation (`base_domain` sits under `dns:`) and quotes the `sh -c` argument
+([tui-kit#30](https://github.com/tui-tools/tui-kit/issues/30) and
+[tui-kit#31](https://github.com/tui-tools/tui-kit/issues/31), fixed).
+
+<figure class="shots-main guide-shot">
+  <img src="/guides/a-company-tailnet-with-keycloak-single-sign-on/15-server-diff.png" alt="tui-tailscale&#x27;s diff of /etc/headscale/config.yaml with the TLS paths and base_domain, followed by the quoted write command" width="1098" height="720" style="width:100%" loading="lazy" />
+  <figcaption class="shots-caption">Enter, scrolled to the end: server_url, listen_addr, the certificate paths and base_domain, and the quoted sh -c that writes the file</figcaption>
+</figure>
+
+<figure class="shots-main guide-shot">
+  <img src="/guides/a-company-tailnet-with-keycloak-single-sign-on/16-server-enable.png" alt="tui-tailscale&#x27;s dialog to run systemctl enable --now headscale" width="1143" height="360" style="width:100%" loading="lazy" />
+  <figcaption class="shots-caption"><code>y</code>: the unit was disabled, so the last step enables and starts it</figcaption>
+</figure>
+
+<figure class="shots-main guide-shot">
+  <img src="/guides/a-company-tailnet-with-keycloak-single-sign-on/17-server-done.png" alt="tui-tailscale&#x27;s control-plane panel with headscale active, the own-certificate transport and the next step about the closed port" width="1170" height="720" style="width:100%" loading="lazy" />
+  <figcaption class="shots-caption"><code>y</code>: headscale runs with its own certificate. Next step: 19443/tcp closed (tui-firewall is not installed yet, so nftables is read directly)</figcaption>
+</figure>
+
+```console
+$ curl -sS https://vpn.lab.internal:19443/health
+{"status":"pass"}
+$ headscale version | head -1
+headscale version v0.29.3+dirty
+```
+
+curl verifies the certificate against the system store. The `+dirty` comes
+from the package and is still open against the packaging.
+
+### 10. Keycloak as the identity provider (`O`)
+
+`O` starts with a provider picker. Generic OIDC takes any OpenID Connect
+provider: the issuer `https://sso.lab.internal:18443/realms/company`, the
+client ID, the secret, and the allow lists.
+
+<figure class="shots-main guide-shot">
+  <img src="/guides/a-company-tailnet-with-keycloak-single-sign-on/18-oidc-provider.png" alt="tui-tailscale&#x27;s identity provider picker with generic OIDC selected" width="972" height="288" style="width:100%" loading="lazy" />
+  <figcaption class="shots-caption"><code>O</code>: generic OIDC rather than the Google preset</figcaption>
+</figure>
+
+<figure class="shots-main guide-shot">
+  <img src="/guides/a-company-tailnet-with-keycloak-single-sign-on/19-oidc-client-id.png" alt="tui-tailscale&#x27;s client id step with headscale typed and the redirect URI to register" width="954" height="378" style="width:100%" loading="lazy" />
+  <figcaption class="shots-caption">Client id headscale, and the redirect URI to register in the IdP</figcaption>
+</figure>
+
+The secret was pasted from the root-only file through a tmux buffer, so it was
+never typed or echoed.
+
+<figure class="shots-main guide-shot">
+  <img src="/guides/a-company-tailnet-with-keycloak-single-sign-on/20-oidc-secret-masked.png" alt="tui-tailscale&#x27;s client secret step with the value masked by asterisks" width="954" height="414" style="width:100%" loading="lazy" />
+  <figcaption class="shots-caption">The client secret, masked. It goes to a mode 600 file and is never shown again</figcaption>
+</figure>
+
+<figure class="shots-main guide-shot">
+  <img src="/guides/a-company-tailnet-with-keycloak-single-sign-on/21-oidc-groups.png" alt="tui-tailscale&#x27;s allowed groups step with vpn-users typed and the explanation of how the allow lists combine" width="954" height="396" style="width:100%" loading="lazy" />
+  <figcaption class="shots-caption">allowed_groups vpn-users, with domains and users left empty. The hint is why step 5 needed the mapper</figcaption>
+</figure>
+
+Before writing, the tool fetched the issuer's discovery document from this
+machine, the one that will have to reach Keycloak.
+
+<figure class="shots-main guide-shot">
+  <img src="/guides/a-company-tailnet-with-keycloak-single-sign-on/22-oidc-secret-write.png" alt="tui-tailscale&#x27;s dialog to write the OIDC client secret file, reporting that the issuer answered correctly" width="1143" height="522" style="width:100%" loading="lazy" />
+  <figcaption class="shots-caption">Step 1 of 3: the issuer answered; the secret travels on standard input, not on the command line</figcaption>
+</figure>
+
+<figure class="shots-main guide-shot">
+  <img src="/guides/a-company-tailnet-with-keycloak-single-sign-on/23-oidc-diff.png" alt="tui-tailscale&#x27;s diff adding the indented oidc block with issuer, client id, secret path, scope and allowed_groups vpn-users" width="1098" height="648" style="width:100%" loading="lazy" />
+  <figcaption class="shots-caption">Step 2 of 3: the oidc block, indented as it lands in config.yaml, with PKCE on</figcaption>
+</figure>
+
+<figure class="shots-main guide-shot">
+  <img src="/guides/a-company-tailnet-with-keycloak-single-sign-on/24-oidc-done.png" alt="tui-tailscale&#x27;s control-plane panel after the OIDC change, showing the issuer, client id, secret set and allowed groups vpn-users" width="1170" height="720" style="width:100%" loading="lazy" />
+  <figcaption class="shots-caption">Step 3 restarted headscale: OIDC set, groups vpn-users, PKCE on, secret set</figcaption>
+</figure>
+
+### 11. Open the ports (`f`, into tui-firewall)
+
+The readiness line said `19443/tcp` was closed. `f` offers to install
+[tui-firewall](/tools/tui-firewall/) when it is missing and hands over to it
+right after ([tui-tailscale#25](https://github.com/tui-tools/tui-tailscale/issues/25), fixed).
+
+<figure class="shots-main guide-shot">
+  <img src="/guides/a-company-tailnet-with-keycloak-single-sign-on/25-firewall-install-confirm.png" alt="tui-tailscale&#x27;s dialog to install tui-firewall with apt-get" width="1143" height="414" style="width:100%" loading="lazy" />
+  <figcaption class="shots-caption"><code>f</code> without tui-firewall: installing it changes no rule</figcaption>
+</figure>
+
+In tui-firewall, `a` adds `19443/tcp` for the control port that laptops,
+browsers and nodes reach, and `41641/udp` for direct connections between
+nodes. The add preview for a rule with a comment is not shell-quoted yet
+([tui-firewall#26](https://github.com/tui-tools/tui-firewall/issues/26), open).
+
+<figure class="shots-main guide-shot">
+  <img src="/guides/a-company-tailnet-with-keycloak-single-sign-on/26-firewall-add-19443.png" alt="tui-firewall&#x27;s add rule form for port 19443 tcp with the comment headscale control (tailnet)" width="963" height="432" style="width:100%" loading="lazy" />
+  <figcaption class="shots-caption"><code>f</code>, then <code>a</code>: allow 19443/tcp with a comment</figcaption>
+</figure>
+
+<figure class="shots-main guide-shot">
+  <img src="/guides/a-company-tailnet-with-keycloak-single-sign-on/27-firewall-rules.png" alt="tui-firewall&#x27;s ufw rule list with 19443/tcp and 41641/udp allowed" width="1152" height="702" style="width:100%" loading="lazy" />
+  <figcaption class="shots-caption">Both rules added, for IPv4 and IPv6, on ufw</figcaption>
+</figure>
+
+<figure class="shots-main guide-shot">
+  <img src="/guides/a-company-tailnet-with-keycloak-single-sign-on/28-back-from-firewall.png" alt="tui-tailscale&#x27;s control-plane panel after returning from tui-firewall, with the next step no node yet" width="1170" height="720" style="width:100%" loading="lazy" />
+  <figcaption class="shots-caption"><code>q</code>: back in tui-tailscale, the ports read through tui-firewall are open and the next step is the first node (tui-tailscale#24, fixed)</figcaption>
+</figure>
+
+### 12. The control plane joins as a subnet router
+
+The control plane joins with a pre-auth key: it is a server, and nobody signs
+in to Keycloak as it. `n` on the users screen created user `infra`, and `n` on
+the pre-auth keys screen a key for it that expires in an hour. The key is
+shown once, on the status line; no frame with it was kept. On a 120-column
+terminal it was cut at the edge
+([tui-tailscale#30](https://github.com/tui-tools/tui-tailscale/issues/30), open).
+
+`1`, `i` installed Tailscale from its own apt repository, then `j`: the login
+server this host serves, the key, hostname `control`, and `10.88.0.0/16` to
+advertise. That is the podman bridge where Keycloak's container lives; on a
+real network it would be the office LAN.
+
+<figure class="shots-main guide-shot">
+  <img src="/guides/a-company-tailnet-with-keycloak-single-sign-on/29-control-join-confirm.png" alt="tui-tailscale&#x27;s join dialog for the control plane with the key file, sysctl settings and tailscale up command" width="1152" height="648" style="width:100%" loading="lazy" />
+  <figcaption class="shots-caption"><code>j</code>: the key goes through a root-only file under /run, IP forwarding is made permanent, and 10.88.0.0/16 is advertised</figcaption>
+</figure>
+
+<figure class="shots-main guide-shot">
+  <img src="/guides/a-company-tailnet-with-keycloak-single-sign-on/30-routes-approve-confirm.png" alt="tui-tailscale&#x27;s dialog approving 10.88.0.0/16 for node 1" width="1089" height="360" style="width:100%" loading="lazy" />
+  <figcaption class="shots-caption"><code>4</code>, then <code>r</code>: approving the route the node advertises</figcaption>
+</figure>
+
+<figure class="shots-main guide-shot">
+  <img src="/guides/a-company-tailnet-with-keycloak-single-sign-on/31-nodes-ready.png" alt="tui-tailscale&#x27;s nodes screen with control online, 1/1 routes approved and the readiness line ready" width="1170" height="720" style="width:100%" loading="lazy" />
+  <figcaption class="shots-caption">Ready: the route approved, and the readiness line adds that relays go through Tailscale's public DERP servers</figcaption>
+</figure>
+
+## Part three: people join
+
+### 13. alice joins from the laptop
+
+On the laptop, `sudo pacman -S tui-tools/tui-tailscale`, `i` for Tailscale from
+Arch's repositories, then `j`: the login server, no pre-auth key, hostname
+`laptop`, and accept routes. The join checks the server's certificate first;
+`lab-ca` is already trusted, so there is no CA step.
+
+<figure class="shots-main guide-shot">
+  <img src="/guides/a-company-tailnet-with-keycloak-single-sign-on/32-client-join-confirm.png" alt="tui-tailscale&#x27;s join dialog on the laptop with tailscale up and --accept-routes, without a pre-auth key" width="1143" height="450" style="width:100%" loading="lazy" />
+  <figcaption class="shots-caption"><code>j</code> with an empty key: tailscale will print a login URL</figcaption>
+</figure>
+
+<figure class="shots-main guide-shot">
+  <img src="/guides/a-company-tailnet-with-keycloak-single-sign-on/33-client-login-url.png" alt="tui-tailscale&#x27;s log in to finish joining dialog with the registration URL printed below it" width="990" height="396" style="width:100%" loading="lazy" />
+  <figcaption class="shots-caption"><code>y</code>: the login URL, on its own line outside the frame so it copies whole</figcaption>
+</figure>
+
+Opened in the browser as alice, the URL goes to Headscale, then Keycloak asks
+for her password and sends her back. Headscale 0.29 then asks her to confirm
+that the device is hers.
+
+<figure class="shots-main guide-shot">
+  <img src="/guides/a-company-tailnet-with-keycloak-single-sign-on/browser-alice-join-before-click.png" alt="Headscale&#x27;s confirm node registration page for hostname laptop, registered to Alice Example" width="1280" height="834" style="width:100%" loading="lazy" />
+  <figcaption class="shots-caption">Headscale after the Keycloak login: confirm node registration for laptop, registered to Alice Example</figcaption>
+</figure>
+
+<figure class="shots-main guide-shot">
+  <img src="/guides/a-company-tailnet-with-keycloak-single-sign-on/browser-alice-join.png" alt="Headscale&#x27;s node registered page for Alice Example" width="1280" height="832" style="width:100%" loading="lazy" />
+  <figcaption class="shots-caption">After Confirm registration: node registered as Alice Example</figcaption>
+</figure>
+
+The laptop's node screen turned to running on its own, since it re-reads while
+a login is pending. Both laptop frames lack the title row, because at 120
+columns the header wraps and pushes it off the top
+([tui-tailscale#31](https://github.com/tui-tools/tui-tailscale/issues/31), open).
+
+<figure class="shots-main guide-shot">
+  <img src="/guides/a-company-tailnet-with-keycloak-single-sign-on/34-client-node-alice.png" alt="tui-tailscale&#x27;s node screen on the laptop, running and online as alice@company.example with address 100.64.0.2" width="1107" height="720" style="width:100%" loading="lazy" />
+  <figcaption class="shots-caption">The laptop's node screen: running as alice@company.example, laptop.company.internal (title row missing, tui-tailscale#31)</figcaption>
+</figure>
+
+<figure class="shots-main guide-shot">
+  <img src="/guides/a-company-tailnet-with-keycloak-single-sign-on/35-client-peers.png" alt="tui-tailscale&#x27;s peers screen on the laptop listing control with the route 10.88.0.0/16" width="1143" height="720" style="width:100%" loading="lazy" />
+  <figcaption class="shots-caption">The peers screen: control, serving 10.88.0.0/16 (title row missing, tui-tailscale#31)</figcaption>
+</figure>
+
+```console
+$ tailscale ping -c 3 control
+pong from control (100.64.0.1) via DERP(sao) in 49ms
+pong from control (100.64.0.1) via DERP(sao) in 53ms
+pong from control (100.64.0.1) via DERP(sao) in 49ms
+$ ping -c 2 10.88.0.1
+2 packets transmitted, 2 received, 0% packet loss, time 1001ms
+```
+
+The subnet answers through the approved route, relayed by `DERP(sao)`,
+Tailscale's public relay in São Paulo, as the relays line warned. A DERP server
+only forwards traffic that is already encrypted end to end, as Tailscale's
+[DERP documentation](https://tailscale.com/kb/1232/derp-servers) explains, but
+a company that self-hosts will want to know which servers its traffic crosses.
+
+<figure class="shots-main guide-shot">
+  <img src="/guides/a-company-tailnet-with-keycloak-single-sign-on/36-nodes-alice.png" alt="tui-tailscale&#x27;s nodes screen on the control plane with laptop owned by alice and online" width="1170" height="720" style="width:100%" loading="lazy" />
+  <figcaption class="shots-caption">On the control plane, <code>4</code>: laptop, owned by alice, online</figcaption>
+</figure>
+
+<figure class="shots-main guide-shot">
+  <img src="/guides/a-company-tailnet-with-keycloak-single-sign-on/37-users-alice.png" alt="tui-tailscale&#x27;s users screen listing infra and alice, whose provider is oidc and email alice@company.example" width="1170" height="720" style="width:100%" loading="lazy" />
+  <figcaption class="shots-caption"><code>3</code>: alice was created by her first login, provider oidc, with her Keycloak email</figcaption>
+</figure>
+
+### 14. bob is refused
+
+The laptop logs out and joins again with the same answers.
+
+<figure class="shots-main guide-shot">
+  <img src="/guides/a-company-tailnet-with-keycloak-single-sign-on/38-client-logout-confirm.png" alt="tui-tailscale&#x27;s dialog to run tailscale logout" width="1116" height="378" style="width:100%" loading="lazy" />
+  <figcaption class="shots-caption"><code>L</code>: log out of the tailnet</figcaption>
+</figure>
+
+This time bob signs in. Keycloak accepts his password, and Headscale says no.
+
+<figure class="shots-main guide-shot">
+  <img src="/guides/a-company-tailnet-with-keycloak-single-sign-on/browser-bob-form.png" alt="Keycloak&#x27;s sign in page for the Company realm with the username bob and a masked password" width="1280" height="720" style="width:100%" loading="lazy" />
+  <figcaption class="shots-caption">Keycloak's sign-in page, as bob</figcaption>
+</figure>
+
+<figure class="shots-main guide-shot">
+  <img src="/guides/a-company-tailnet-with-keycloak-single-sign-on/browser-bob-join.png" alt="Headscale&#x27;s error page reading Unauthorized, you are not authorized, please contact your administrator" width="1280" height="832" style="width:100%" loading="lazy" />
+  <figcaption class="shots-caption">Headscale refuses: bob's token claims no allowed group</figcaption>
+</figure>
+
+The page tells bob nothing, which is right for him. Headscale's log tells the
+administrator why:
+
+```text
+ERR user msg: unauthorised group error="authenticated principal is not in any allowed group" code=401
+INF http request method=GET path=/oidc/callback status=401
+```
+
+No user and no node were created for him. On the control plane, the attempt
+shows as refused by the policy, and `R` will not register it, so nobody can
+register the device around `allowed_groups` by mistake
+([tui-tailscale#26](https://github.com/tui-tools/tui-tailscale/issues/26), fixed).
+
+<figure class="shots-main guide-shot">
+  <img src="/guides/a-company-tailnet-with-keycloak-single-sign-on/39-nodes-bob-refused.png" alt="tui-tailscale&#x27;s nodes screen with a red line saying a node was refused by the identity provider&#x27;s policy and R will not register it" width="1170" height="720" style="width:100%" loading="lazy" />
+  <figcaption class="shots-caption">The nodes screen after bob: refused by the identity provider's policy, R will not register it. alice's laptop shows expired after her logout</figcaption>
+</figure>
+
+The laptop logged out at the end, and both guests were restored to the
+snapshots they had before the run.
+
+## What we found
+
+A first run of this case, on tui-tailscale 1.0.0, filed the issues below. These
+seven are fixed in tui-tailscale 1.0.1 and tui-kit v0.4.2, and this run shows
+each fix where it applies:
+
+- [tui-tailscale#23](https://github.com/tui-tools/tui-tailscale/issues/23): the apt install hung on needrestart (step 7).
+- [tui-tailscale#24](https://github.com/tui-tools/tui-tailscale/issues/24): the ports read as closed on a ufw host whose ports were open (step 11).
+- [tui-tailscale#25](https://github.com/tui-tools/tui-tailscale/issues/25): tui-firewall installed during a session was still treated as missing (step 11).
+- [tui-tailscale#26](https://github.com/tui-tools/tui-tailscale/issues/26): `R` was offered for a registration the IdP had refused (step 14).
+- [tui-tailscale#27](https://github.com/tui-tools/tui-tailscale/issues/27): nothing said the tailnet relays through Tailscale's public DERP servers (steps 7 and 12).
+- [tui-kit#30](https://github.com/tui-tools/tui-kit/issues/30): diffs lost their indentation (steps 9 and 10).
+- [tui-kit#31](https://github.com/tui-tools/tui-kit/issues/31): command previews were not shell-quoted (steps 9 and 10).
+
+Still open, from both runs:
+
+- [tui-tailscale#30](https://github.com/tui-tools/tui-tailscale/issues/30): the shown-once pre-auth key is cut at the edge of a 120-column terminal.
+- [tui-tailscale#31](https://github.com/tui-tools/tui-tailscale/issues/31): at 120 columns the node screen's header wraps and pushes the title row off the top.
+- [tui-tailscale#32](https://github.com/tui-tools/tui-tailscale/issues/32): `f` could hand the closed ports to tui-firewall instead of an empty rule list.
+- [tui-firewall#26](https://github.com/tui-tools/tui-firewall/issues/26): rule previews with a comment are not shell-quoted.
+- [tui-kit#36](https://github.com/tui-tools/tui-kit/issues/36): `render-screenshots --from-ansi` cannot crop columns, so cropped dialogs stay off-center in these images.
+- [tui-cert#24](https://github.com/tui-tools/tui-cert/issues/24): export without ssh, the trust status line on Ubuntu, numeric owners for containers, and a quick way to clear prefilled fields.
+- tui-tools/pkgs#13, in the family's packaging repository, which is private: the headscale package reports `v0.29.3+dirty`.
+
+What the run proves: a Headscale control plane set up entirely through
+tui-tailscale, with a certificate from a tui-cert CA, admitted a Keycloak user
+in the allowed group through a browser login with verification on, routed a
+subnet to her, and refused a Keycloak user outside the group. What it does not
+prove: behaviour where nodes reach each other over UDP, names served by real
+DNS, traffic that crosses the host firewall, or any identity provider other
+than Keycloak 26.7.4.
+
+## Related guides
+
+- [A private tailnet with your own CA](/guides/a-private-tailnet-with-your-own-ca/):
+  the same control plane and CA with pre-auth keys and no identity provider,
+  including the CA step a join takes when the laptop does not trust the CA yet.
+- [Self-hosted Tailscale with Headscale and Google login](/guides/self-hosted-tailscale-with-headscale-and-google-login/):
+  a public control plane with Let's Encrypt and Google, and why
+  `allowed_groups` stays empty there.
+- [A local CA with tui-cert](/guides/a-local-ca-with-tui-cert/): the CA in
+  depth, including untrusting it and what each finding means.
+- [Opening ports on a cloud image's iptables firewall](/guides/opening-ports-on-a-cloud-images-iptables-firewall/):
+  step 11 on a cloud image whose INPUT chain ends in a REJECT.
