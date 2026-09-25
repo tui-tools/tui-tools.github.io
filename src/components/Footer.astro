@@ -11,6 +11,9 @@ hostedHref.searchParams.set("utm_source", "tui.tools");
 hostedHref.searchParams.set("utm_medium", "footer");
 hostedHref.searchParams.set("utm_campaign", "hosted-by");
 hostedHref.searchParams.set("utm_content", Astro.url.pathname);
+// The creator credit is a plain referral, one fixed campaign for every page.
+const creditHref =
+  "https://quave.one/?utm_source=tui.tools&utm_medium=referral&utm_campaign=footer";
 ---
 
 <footer class="footer">
@@ -82,10 +85,12 @@ hostedHref.searchParams.set("utm_content", Astro.url.pathname);
         <h3>Creator</h3>
         <ul>
           <li>
-            <a href="https://x.com/edimarlnx" target="_blank" rel="me noopener">
-              @edimarlnx on X
-            </a>
+            Built by{" "}
+            <a href="https://x.com/edimarlnx" target="_blank" rel="me noopener">Edimar Cardoso</a>,
+            co-founder of{" "}
+            <a href={creditHref} target="_blank" rel="noopener">Quave ONE</a>.
           </li>
+          <li><a href="/about/">About</a></li>
           <li>
             <a href="https://github.com/sponsors/edimarlnx" rel="noopener">
               Sponsor on GitHub
@@ -96,13 +101,13 @@ hostedHref.searchParams.set("utm_content", Astro.url.pathname);
     </div>
 
     <p class="disclaimer">
-      <strong>Unofficial.</strong> These tools follow the
+      <strong>Unofficial.</strong> These tools follow the{" "}
       <a href="https://omarchy.org" rel="noopener">Omarchy</a> visual style and read
       its theme files. They are <strong>not</strong> part of the Omarchy project and
       are not endorsed by its maintainers.
     </p>
     <p class="disclaimer" style="border: 0; margin-top: 0.75rem; padding-top: 0;">
-      MIT licensed, per repository. Catalog built from each tool's
+      MIT licensed, per repository. Catalog built from each tool's{" "}
       <code>tool.json</code> at <span>{stamp} UTC</span>.
     </p>
 

@@ -134,6 +134,25 @@ export function techArticle({ guide, url, published, modified, tools = [], site 
 }
 
 /**
+ * The person behind the family, for the about page. Deliberately small: a
+ * name, the page that describes him, his public profile, and the company he
+ * co-founded. Nothing the page itself does not say.
+ */
+export function person({ site }) {
+  return {
+    "@type": "Person",
+    name: "Edimar Cardoso",
+    url: absolute("/about/", site),
+    sameAs: ["https://x.com/edimarlnx"],
+    worksFor: {
+      "@type": "Organization",
+      name: "Quave ONE",
+      url: "https://quave.one/",
+    },
+  };
+}
+
+/**
  * One script per page, with `@graph` when the page has more than one node.
  *
  * The escaping is the point: inside a `<script>` element the parser is looking

@@ -1,0 +1,48 @@
+---
+// Who builds the family. Short on purpose: a name, a sentence of background,
+// what the tools are, and where to follow the work.
+import Base from "../layouts/Base.astro";
+import { person } from "../lib/jsonld.js";
+
+const quaveHref =
+  "https://quave.one/?utm_source=tui.tools&utm_medium=referral&utm_campaign=about";
+---
+
+<Base
+  title="About"
+  seoTitle="About tui-tools and Edimar Cardoso"
+  description="tui-tools is built by Edimar Cardoso, who has worked in technology since 2005 and is a co-founder of Quave ONE."
+  ogSlug="about"
+  jsonLd={[person({ site: Astro.site })]}
+>
+  <div class="page">
+    <section class="hero" style="grid-template-columns:1fr">
+      <div class="prose" style="max-width:62ch">
+        <p class="eyebrow">About</p>
+        <h1>Edimar Cardoso</h1>
+        <p class="lede">
+          Edimar Cardoso has worked in technology since 2005 and is a co-founder of{" "}
+          <a href={quaveHref} rel="noopener">Quave ONE</a>.
+        </p>
+        <p>
+          tui-tools is his open-source family of terminal tools for running Linux
+          servers. Each tool does one job, every change is previewed before it
+          runs, and every release is validated on real machines. The{" "}
+          <a href="/security/">security page</a> lists the principles behind
+          that, and the source lives in the{" "}
+          <a href="https://github.com/tui-tools" rel="noopener">tui-tools GitHub organization</a>.
+        </p>
+        <p>
+          The tools are for people who run their own servers.{" "}
+          <a href={quaveHref} rel="noopener">Quave ONE</a> is for teams who would
+          rather not.
+        </p>
+        <p>
+          Follow the work on X at{" "}
+          <a href="https://x.com/edimarlnx" rel="me noopener">@edimarlnx</a> and on
+          GitHub at <a href="https://github.com/tui-tools" rel="noopener">github.com/tui-tools</a>.
+        </p>
+      </div>
+    </section>
+  </div>
+</Base>

@@ -82,6 +82,11 @@ const PAGES = [
     title: "tui-kit",
     line: "The shared foundation every tui-tools tool is built on",
   },
+  {
+    slug: "about",
+    title: "About",
+    line: "Who builds tui-tools",
+  },
 ];
 
 // ------------------------------------------------------------------ fonts
