@@ -1,0 +1,25 @@
+---
+// One of a tool's own screenshots, placed inside a guide.
+//
+// The image is not vendored here: scripts/build-catalog.mjs downloads every
+// screenshot a tool's manifest lists into public/tools/<tool>/ on each build,
+// the same copy the tool page shows. The caption is the manifest's, so a guide
+// and the tool page never describe the same picture two ways.
+//
+// A screenshot the manifest no longer lists fails the build instead of leaving
+// a broken image on a published page.
+import catalog from "../data/catalog.json";
+
+const { tool, file } = Astro.props;
+const src = `/tools/${tool}/${file}`;
+const entry = catalog.tools.find((item) => item.name === tool);
+const shot = entry?.screenshots?.find((item) => item.src === src);
+if (!shot) {
+  throw new Error(`Screenshot ${src} is not in ${tool}'s manifest; see src/components/Screenshot.astro`);
+}
+---
+
+<figure class="shots-main guide-shot">
+  <img src={shot.src} alt={shot.caption} loading="lazy" />
+  <figcaption class="shots-caption">{shot.caption}</figcaption>
+</figure>

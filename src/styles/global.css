@@ -1729,6 +1729,23 @@ td .keycap {
   font-size: inherit;
 }
 
+/* A tool's own screenshot in a guide: the tool page's frame and caption, run
+   as wide as a dialog so the terminal is not scaled down to the prose measure. */
+.guide-body > .guide-shot {
+  max-width: none;
+  margin: 1.6rem 0;
+}
+
+/* A table in a guide scrolls inside its own frame on a narrow screen. */
+.guide-body > .table-wrap {
+  max-width: none;
+  margin: 1.6rem 0;
+}
+
+.guide-body > .table-wrap table {
+  margin: 0;
+}
+
 /* A transcript: the dialog frame, no copy button, and a chip saying whether
    the check passed or was made to fail. */
 .output .dialog-body pre {
