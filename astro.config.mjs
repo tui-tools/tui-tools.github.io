@@ -94,6 +94,14 @@ export default defineConfig({
   devToolbar: {
     enabled: false,
   },
+  // A tool renamed on GitHub keeps its old page as a redirect, so links already
+  // posted and indexed land on the new name. The site is static on Pages, which
+  // cannot answer a 301, so Astro writes a page with a meta refresh, a canonical
+  // link to the new URL and a noindex, which search engines treat as a move.
+  redirects: {
+    // tui-vpn became tui-wireguard in 0.5.0, when Headscale moved to tui-tailscale.
+    "/tools/tui-vpn/": "/tools/tui-wireguard/",
+  },
   integrations: [
     // Guides are .mdx so their prose stays markdown while the commands a
     // reader is meant to copy are the site's own CommandDialog, the same
