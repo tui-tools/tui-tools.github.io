@@ -308,6 +308,12 @@ hr {
   white-space: nowrap;
 }
 
+/* The stable tools, when there are any, follow the beta sentence as their own
+   clause; on a narrow screen it wraps to a row of its own. */
+.beta-banner-stable a {
+  white-space: normal;
+}
+
 /* On a phone the line is three rows of text already; the tag sits on its own
    row above it rather than stealing width from the sentence. */
 @media (max-width: 33.999rem) {
@@ -667,6 +673,23 @@ hr {
   background: color-mix(in srgb, var(--soon) 10%, var(--panel-raised));
 }
 
+/* A tool promoted past beta. It takes the accent rather than the warning tone,
+   and it is a link to the bar the tool met, so it keeps the chip's shape and
+   only gains an underline on hover. */
+.chip-stable {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--frame));
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel-raised));
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.chip-stable:hover,
+.chip-stable:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
 .chips {
   display: flex;
   flex-wrap: wrap;
@@ -696,8 +719,11 @@ hr {
   transform: translateY(-2px);
 }
 
+/* The head wraps, so a long version label (a stable tool's "Stable since")
+   drops to its own row on a narrow card instead of splitting the tool's name. */
 .card-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.75rem;
   padding: 1rem 1.1rem 0.75rem;
@@ -706,6 +732,8 @@ hr {
 .card-version {
   margin-left: auto;
   display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: center;
   gap: 0.35rem;
 }
@@ -717,6 +745,7 @@ hr {
 }
 
 .card-name {
+  white-space: nowrap;
   font-family: var(--mono);
   font-size: 1.05rem;
   font-weight: 700;

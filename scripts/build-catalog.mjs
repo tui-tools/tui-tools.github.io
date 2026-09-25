@@ -361,6 +361,47 @@ function headlineInstall(entries) {
   };
 }
 
+/**
+ * Compare two "X.Y.Z" versions numerically. Anything that is not three numbers
+ * sorts as 0.0.0, so a malformed tag can never look newer than a real one.
+ */
+function compareVersions(a, b) {
+  const parts = (version) => {
+    const match = /^(\d+)\.(\d+)\.(\d+)/.exec(version ?? "");
+    return match ? match.slice(1).map(Number) : [0, 0, 0];
+  };
+  const [x, y] = [parts(a), parts(b)];
+  for (let i = 0; i < 3; i += 1) {
+    if (x[i] !== y[i]) return x[i] - y[i];
+  }
+  return 0;
+}
+
+/**
+ * Where a tool stands against the family's stability bar (tui-kit
+ * docs/stability.md), as the site shows it. The manifest is read at the default
+ * branch's HEAD, and a promotion lands there before its tag, so a tool whose
+ * latest release is older than `stableSince` is still beta on the site: the
+ * release a reader downloads is the one the label describes. A manifest that
+ * says stable without a valid `stableSince` is refused by the kit's schema; if
+ * one ever gets here anyway, it is shown as beta rather than guessed at.
+ */
+function buildStability(manifest, release) {
+  const beta = { stability: "beta", stableSince: null };
+  if (manifest.stability !== "stable") return beta;
+
+  const since = manifest.stableSince;
+  if (typeof since !== "string" || compareVersions(since, "1.0.0") < 0) {
+    console.warn(`  ! ${manifest.name}: stable without a valid stableSince, shown as beta`);
+    return beta;
+  }
+  if (!release || compareVersions(release.version, since) < 0) {
+    console.warn(`  ! ${manifest.name}: stable since ${since}, pending that tag, shown as beta`);
+    return beta;
+  }
+  return { stability: "stable", stableSince: since };
+}
+
 async function buildTool(repo, pkgsLive) {
   const response = await rawFile(repo, "tool.json");
   if (!response) return null;
@@ -402,6 +443,7 @@ async function buildTool(repo, pkgsLive) {
     keywords: manifest.keywords ?? [],
     maintainers: manifest.maintainers ?? [],
     since: manifest.since,
+    ...buildStability(manifest, release),
     security: manifest.security,
     stars: repo.stargazers_count ?? 0,
     topics: repo.topics ?? [],

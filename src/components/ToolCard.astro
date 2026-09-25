@@ -1,5 +1,6 @@
 ---
 import VersionChip from "./VersionChip.astro";
+import { isStable } from "../lib/stability.js";
 
 const { tool } = Astro.props;
 
@@ -44,7 +45,7 @@ const backendHints = (tool.backends ?? []).map((backend) =>
       </h3>
     </div>
     <span class="card-version">
-      <VersionChip tag={version} />
+      <VersionChip tag={version} stableSince={isStable(tool) ? tool.stableSince : null} />
     </span>
   </div>
 

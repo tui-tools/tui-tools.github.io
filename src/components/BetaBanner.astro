@@ -9,6 +9,14 @@
 // tool READMEs carry it word for word, so it is changed in all of them at once
 // or in none. The banner shows "Beta" as its own tag and the rest as the line,
 // which reads as the same sentence with its first word set apart.
+//
+// A tool can leave beta before the family does. When one has, the banner names
+// it after the sentence, read from the catalog, so the line stays true without
+// anyone editing it when the next tool is promoted.
+import catalog from "../data/catalog.json";
+import { STABILITY_DOC, stableTools } from "../lib/stability.js";
+
+const stable = stableTools(catalog);
 ---
 
 <aside class="beta-banner" aria-label="Project status">
@@ -19,6 +27,20 @@
       may move without notice until 1.0. Pin versions, and report what
       breaks.</span
     >
+    {
+      stable.length > 0 && (
+        <span class="beta-banner-stable">
+          Stable, and following semver:{" "}
+          {stable.map((tool, index) => (
+            <>
+              {index > 0 && ", "}
+              <a href={`/tools/${tool.name}/`}>{tool.name}</a> since {tool.since}
+            </>
+          ))}
+          . <a href={STABILITY_DOC} rel="noopener">What stable means</a>
+        </span>
+      )
+    }
     <a href="/install/#beta">What changed</a>
   </p>
 </aside>

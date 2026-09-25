@@ -1,18 +1,32 @@
 ---
 // The version a tool is at, and the one thing a reader has to know about that
-// version: the family is in beta. Both places that show a version — the grid
-// card and the tool page header — render this, so the beta chip appears next
-// to every version without a single tool being edited.
-const { tag = null } = Astro.props;
+// version: whether it is beta or stable. Both places that show a version, the
+// grid card and the tool page header, render this. The family is beta, so a
+// tool is beta unless its manifest promoted it; a stable tool shows the release
+// it became stable at, linked to the bar it met.
+import { STABILITY_DOC } from "../lib/stability.js";
+
+const { tag = null, stableSince = null } = Astro.props;
 ---
 
 {
   tag ? (
     <>
       <span class="chip chip-version">{tag}</span>
-      <span class="chip chip-beta" title="The family is in beta: interfaces may still change.">
-        beta
-      </span>
+      {stableSince ? (
+        <a
+          class="chip chip-stable"
+          href={STABILITY_DOC}
+          rel="noopener"
+          title="Stable: this tool met the family's stability bar and follows semver from this release on."
+        >
+          Stable since {stableSince}
+        </a>
+      ) : (
+        <span class="chip chip-beta" title="The family is in beta: interfaces may still change.">
+          beta
+        </span>
+      )}
     </>
   ) : (
     <span class="chip chip-unreleased">unreleased</span>
