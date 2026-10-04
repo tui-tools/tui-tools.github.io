@@ -87,14 +87,18 @@ const imageAlt = ogImageAlt ?? description;
          no personal data: it counts page views and the handful of named events
          listed in the site README. `data-do-not-track` makes it stand down for
          anyone whose browser asks not to be tracked, and `data-domains` keeps
-         it quiet on forks and local builds. -->
+         it quiet on forks and local builds. `/umami-filter.js` defines the
+         `data-before-send` hook that leaves automated browsers out of the
+         count without blocking them. -->
+    <script is:inline defer src="/umami-filter.js"></script>
     <script
       is:inline
       defer
       src="https://analytics.tui.tools/script.js"
       data-website-id="d930a4b8-72ea-43ed-92b0-f159d639210d"
       data-domains="tui-tools.github.io,tui.tools"
-      data-do-not-track="true"></script>
+      data-do-not-track="true"
+      data-before-send="umamiBeforeSend"></script>
   </head>
   <body>
     <a class="skip" href="#main">Skip to content</a>

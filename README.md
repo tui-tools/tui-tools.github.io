@@ -554,6 +554,7 @@ already on disk.
 | `src/lib/markdown.js` | The safe markdown subset a manifest's `description` may use |
 | `src/lib/seo.js` | The generated `<title>`, meta description and the tool page's opening sentence, all derived from the catalog |
 | `src/lib/jsonld.js` | The structured data every page publishes: `SoftwareApplication`, `BreadcrumbList`, `WebSite`, `Organization`, `TechArticle` |
+| `public/umami-filter.js` | The analytics `data-before-send` hook that keeps automated browsers out of the count, see [Analytics](#analytics) |
 | `src/styles/global.css` | Tokyo Night, and the type rule: the machine speaks in mono, we speak in sans |
 
 ![The install page](docs/screenshots/install.png)
@@ -612,6 +613,19 @@ than rename.
 `tool` is a tool name (or `family` for a command that is not tool-specific),
 `manager` is the install path (`pacman`, `aur`, `apt`, `dnf`, `zypper`,
 `binary`, `source`, …).
+
+**Bots are served, not counted.** Crawlers, link previews and test tools read
+every page like anyone else; nothing blocks them, and `robots.txt` and the
+responses are the same for everyone. They are only left out of the numbers: the
+tag carries `data-before-send="umamiBeforeSend"`, a small function in
+[`public/umami-filter.js`](public/umami-filter.js) loaded just before it.
+Umami calls it before each report, and it skips the report when
+`navigator.webdriver` is true, when the user agent carries a common headless or
+bot marker (HeadlessChrome, PhantomJS, bot, crawler, spider, slurp,
+facebookexternalhit, preview and similar, case insensitive), or when the screen
+is exactly 800x600 and the browser reports no languages at all. Every other
+report goes out unchanged. It stores nothing and sets no cookie. The same file is inlined into the
+pkgs.tui.tools index, so keep the two copies identical.
 
 **How to opt out.** Turn on "Do Not Track" in your browser and the script stands
 down: the tag carries `data-do-not-track="true"`, so it sends nothing at all.
