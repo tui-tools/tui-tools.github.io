@@ -1,0 +1,153 @@
+---
+title: The LAN's DHCP lives in systemd-networkd
+description: "A router does not have to install a DHCP server. networkd already has one, and tui-network drives it through a single drop-in of its own, next to a unit it never rewrites: pool, lease time, advertised DNS and domain, reservations and the leases actually granted."
+date: 2026-09-15
+tools:
+  - tui-network
+draft: true
+---
+
+{/*
+  DRAFT. Not published, not built, no URL.
+
+  Before `draft: false`: replay the DHCP screen on the router and capture the
+  drop-in diff, the two applies and the screen read back after each one. Every
+  command and every key below is the documented form from tui-network's README;
+  no transcript is approximated here.
+*/}
+
+import CommandDialog from "../../components/CommandDialog.astro";
+
+The usual way to give a LAN addresses is to install something. dnsmasq, or ISC
+Kea, and then a configuration file, a unit, and a second thing to keep running.
+On a machine that already runs `systemd-networkd` none of that is necessary,
+because networkd has a DHCP server of its own. It is turned on by
+`DHCPServer=yes` in the LAN's `.network` unit and configured by that unit's
+`[DHCPServer]` section, and that is what an Omarchy Router profile ships.
+
+[tui-network](/tools/tui-network/) drives it the same way it drives dnsmasq, and
+the point of this guide is the file it writes, because that file is the entire
+footprint of every change below.
+
+<CommandDialog title="Open the network tool" command="tui-network" tool="tui-network" />
+
+`D` opens the DHCP screen. It reads whichever server the machine runs, detected
+rather than assumed, and on this one it finds networkd's own.
+
+## What the screen derives, and what it reads
+
+Half of what you see is computed the way systemd computes it, and half is read
+back off the running server.
+
+The pool is derived: from the unit's `Address=` and its `PoolOffset=` and
+`PoolSize=`, where a zero offset means the first address after the subnet
+address and a zero size means the rest of the subnet up to the broadcast
+address. Alongside it are the default lease time, what the leases advertise,
+which is DNS, NTP, the router and the domain, and the
+`[DHCPServerStaticLease]` reservations the configuration declares.
+
+The leases are read. `networkctl status <link>` is where `systemd-networkd`
+publishes them, so that is where the screen gets them, complete with each MAC,
+address, hostname and remaining time. The JSON output does not carry leases at
+all, and the list only arrived in `systemd` 246, which is the kind of detail
+that decides whether a screen can exist.
+
+The header also names the file the section came from. On a router profile that
+is the unit `omarchy-router-nics` wrote, and it is a file this tool will never
+rewrite.
+
+## One drop-in, and only ever one
+
+Every change on this screen, all four of them, is rendered into a single
+drop-in of the tool's own:
+
+```
+/etc/systemd/network/<unit>.network.d/50-tui-network-dhcp.conf
+```
+
+Shown as a unified diff, installed with `install -D -m 644`, applied with
+`networkctl reload`. Not a restart, so no interface comes down. A second change
+edits that same file rather than stacking another drop-in behind it, which is
+why the diff on the second change is against the file as it stands on disk right
+now rather than against nothing.
+
+That is the whole answer to what did this tool do to my machine: one file, next
+to a unit it never touched.
+
+## The options form, and the two systemd details in it
+
+`o` opens the form for the advertised options: the DNS servers, the gateway, the
+domain and the lease time. The title bar names the file the form will write
+before a single key is pressed.
+
+Two systemd behaviours show through the form, because they change what the tool
+can honestly offer.
+
+The first is that a drop-in's list assignment adds to the unit's rather than
+replacing it. A drop-in that only added `DNS=` would leave the server handing out
+two answers, so the tool clears each list before it sets it: `DNS=` on one line,
+then `DNS=` with the value on the next. That is also why the form opens on the
+values in effect across the unit and the drop-in together rather than on the
+drop-in alone. It rewrites the whole answer, so it has to start from the whole
+answer.
+
+The second is that `[DHCPServer]` has no key for the domain. `EmitDomains=`
+belongs to `[IPv6SendRA]`, which is router advertisement and not DHCP, so the
+domain goes out as the raw option it is:
+
+```
+SendOption=15:string:lan.example.test
+```
+
+Setting the advertised DNS to the router's own address rather than leaving
+networkd's keyword for it is worth doing on purpose. A configuration file that
+says what it means is worth more than one that is clever, and it stays readable
+by the next person who opens it.
+
+Fields left empty are shown in grey with what networkd does when you leave them
+that way, so an unset gateway reads as a decision rather than as a gap.
+
+The preview is the drop-in in full, and underneath it two commands: the install
+and the reload. Nothing has run yet.
+
+## A reservation is a MAC and an address
+
+`a` pins an address to a machine. In networkd a static lease is exactly a MAC
+and an address, with no hostname, because `[DHCPServerStaticLease]` has no key
+for one. The prompt says so rather than accepting a field it would throw away,
+which is a small thing that saves someone half an hour of wondering why the name
+never showed up.
+
+The write is the same drop-in with one section more, the same diff, the same
+install and reload. `x` removes a reservation again.
+
+Here the tool hits a limit it cannot design around and says so instead. A
+`[DHCPServerStaticLease]` section is additive and a drop-in cannot take one
+back. So a reservation `tui-network` wrote can be removed, and one the unit
+itself declares is refused, with the file you would have to edit named. The
+alternative would have been to write a drop-in that does nothing and report
+success, which is the failure mode worth caring about.
+
+## Reading the result back off the machine
+
+After each apply the screen re-reads. Two configuration files now, the unit and
+the drop-in, both listed. The advertised DNS and the domain are the ones that
+were set, the reservation appears in the list, and the pool and the existing
+leases are where they were, because none of this restarted anything.
+
+Two things this screen deliberately does not do. It has no DHCP server
+lifecycle: it edits reservations, pool ranges and options, and it will not
+enable, start or install a server, or create a pool from nothing. And on ISC Kea
+it is read-only, showing pools, reservations and leases while offering none of
+the four changes.
+
+You can walk all of it without a router:
+
+<CommandDialog
+  title="A sample router whose DHCP is networkd's own"
+  command="tui-network --demo --demo-dhcp networkd"
+  tool="tui-network"
+/>
+
+Same units, same drop-in, same previews as the real thing, and nothing on your
+machine is read or changed.
