@@ -41,7 +41,7 @@ import { fileURLToPath } from "node:url";
 
 import satori from "satori";
 import { Resvg } from "@resvg/resvg-js";
-import yaml from "js-yaml";
+import * as yaml from "js-yaml";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const OUT_DIR = join(ROOT, "public/og");
