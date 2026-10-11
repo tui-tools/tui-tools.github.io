@@ -1,0 +1,91 @@
+---
+title: "Samba Active Directory: tui-dc, or a web console like Samba Conductor"
+description: tui-dc administers a Samba Active Directory domain from a terminal on the controller; Samba Conductor runs the same kind of domain from a browser, with single sign-on and Google Workspace sync. This page says which one fits which job.
+seoDescription: "When tui-dc fits a Samba Active Directory domain, and when a web console with OIDC, SAML and Google Workspace sync, Samba Conductor, is the better choice."
+seoTitle: "Samba AD: tui-dc or Samba Conductor"
+cover: "/tools/tui-dc/tui-dc-domain.png"
+date: 2026-10-11
+tools:
+  - tui-dc
+  - tui-samba
+draft: false
+---
+
+There are two ways to run a Samba Active Directory domain from tools written by
+the same author. [tui-dc](/tools/tui-dc/) is a terminal UI on the domain
+controller itself. [Samba Conductor](https://openbasalt.org/projects/samba-conductor/)
+is a web console, a self-service portal and an identity provider for the
+domain. They answer different questions, and neither replaces the other.
+
+Samba Conductor is not part of the tui-tools family. It is a separate project
+by the same author, published under the
+[OpenBasalt](https://openbasalt.org/) organization, and nothing in tui-dc
+depends on it. It is mentioned here because a reader looking at tui-dc is
+often asking a question that a web console answers better, and saying so is
+more useful than leaving it out.
+
+## What tui-dc is for
+
+tui-dc is one static binary that you run over SSH on a machine that is, or is
+about to become, a Samba domain controller. It opens read-only: the domain's
+name and functional levels, the role this host plays, the password policy, the
+accounts, the groups, the machine accounts, the domain's DNS zone and the
+replication state per naming context. Every change is one `samba-tool` command,
+shown in full and confirmed before it runs, and no password is ever put on a
+command line. On a machine with `samba-tool` and no domain yet, a wizard
+provisions one. The [tui-dc README](https://github.com/tui-tools/tui-dc#readme)
+has the details, including an explicit list of what it does not do yet.
+
+It fits well when:
+
+- the people who administer the domain already work in a shell, and the
+  controller is reached over SSH anyway;
+- you want nothing else listening on the controller: no web service to expose,
+  patch and put behind a certificate;
+- you want to see the exact `samba-tool` command before it runs, and learn the
+  domain's own tooling while using it;
+- the domain is small, a lab, or a branch office where one or two people make
+  every change.
+
+## When Samba Conductor is the better choice
+
+[Samba Conductor](https://openbasalt.org/projects/samba-conductor/) runs the
+domain from a browser. According to its project page, it covers ground that a
+terminal UI on the controller is not meant to cover:
+
+- people other than administrators need to use the domain: a self-service
+  portal lets everyone edit their own profile, change their password and manage
+  their second factors;
+- other applications should sign in with the domain account: it is an OpenID
+  Connect provider and a SAML 2.0 identity provider backed by the domain, with
+  presets for common applications;
+- the company also uses Google Workspace: it provisions users and groups from
+  the domain to Google Workspace, with a plan and a dry run first, and can
+  import an existing Workspace into a new domain;
+- the work is spread across a team that prefers a browser, with two-factor
+  sign-in required for administrators and an audit log of every change;
+- you want organizational units, Group Policy links, encrypted backups with
+  restore drills, and shares on domain-member file servers managed from the
+  same place.
+
+Its project page states that it is a pre-release, in its validation phase, with
+no tagged version yet, and recommends trying it on a test domain first. Check
+that page for the current status before planning around it.
+
+## Using both
+
+They do not compete for the domain. Both work on the domain's own directory:
+tui-dc runs `samba-tool` on the controller, and Samba Conductor
+applies each change as directory writes made with the signed-in person's own
+identity. A team can run the domain day to day from the web console and still
+open tui-dc on the controller over SSH to read replication state or look at the
+domain the way `samba-tool` sees it.
+
+## And tui-samba
+
+[tui-samba](/tools/tui-samba/) is for the other half of Samba: a file server,
+its shares, its accounts and who is connected. It deliberately leaves Active
+Directory out. On a standalone file server it is the right tool. When the file
+servers are members of a domain and their shares should be managed together
+with the domain's users and groups, Samba Conductor's file server agent is the
+option to look at.

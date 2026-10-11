@@ -249,7 +249,7 @@ under a path. The three places that need an absolute URL — the canonical link,
 `sitemap-index.xml` and `robots.txt` — all derive it from the same `site` value,
 so `SITE_URL` is the only knob.
 
-### Sitemap and robots
+### Sitemap, robots and llms.txt
 
 Both are generated at build time and neither is committed:
 
@@ -262,6 +262,9 @@ Both are generated at build time and neither is committed:
   absent one.
 - **`robots.txt`** is the endpoint `src/pages/robots.txt.js`, which points at
   the sitemap on whatever host `site` names.
+- `llms.txt` is the endpoint `src/pages/llms.txt.js`: a plain-text map of the
+  site for language models, with the main pages, every tool from the catalog
+  and every published guide, so it needs no list maintained by hand either.
 
 ### The machine-readable catalog
 
