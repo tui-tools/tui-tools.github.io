@@ -142,15 +142,15 @@ export function techArticle({ guide, url, published, modified, image, tools = []
 
 /**
  * The person behind the family, for the about page. Deliberately small: a
- * name, the page that describes him, his public profile, and the company he
- * co-founded. Nothing the page itself does not say.
+ * name, the page that describes him, his own site, his public profile, and
+ * the company he co-founded. Nothing the page itself does not say.
  */
 export function person({ site }) {
   return {
     "@type": "Person",
     name: "Edimar Cardoso",
     url: absolute("/about/", site),
-    sameAs: ["https://x.com/edimarlnx"],
+    sameAs: ["https://edimar-cardoso.me/en", "https://x.com/edimarlnx"],
     worksFor: {
       "@type": "Organization",
       name: "Quave ONE",
