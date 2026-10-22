@@ -1,13 +1,12 @@
 ---
 // The site-wide beta notice. It is deliberately plain: one line, no JavaScript,
-// no dismiss button. The family's first releases are days old and its package
-// names, flags and keys are still moving, so a reader who never scrolls should
-// still leave the page knowing that. It goes away when the family is declared
-// stable, and that removal is a 1.0 decision, not a tidy-up.
+// no dismiss button. Most of the family is still beta, and a beta tool's keys,
+// flags and output can still change before its 1.0, so a reader who never
+// scrolls should still leave the page knowing that. It goes away when the
+// family is declared stable, and that removal is a 1.0 decision, not a tidy-up.
 //
-// The sentence is canonical: /catalog.json serves it as `family.notice` and the
-// tool READMEs carry it word for word, so it is changed in all of them at once
-// or in none. The banner shows "Beta" as its own tag and the rest as the line,
+// The sentence is canonical: /catalog.json serves it as `family.notice`, so the
+// two are changed together or not at all. The banner shows "Beta" as its own tag and the rest as the line,
 // which reads as the same sentence with its first word set apart.
 //
 // A tool can leave beta before the family does. When one has, the banner names
@@ -21,11 +20,10 @@ const stable = stableTools(catalog);
 
 <aside class="beta-banner" aria-label="Project status">
   <p class="page beta-banner-inner">
-    <span class="beta-banner-tag">Beta:</span>
+    <span class="beta-banner-tag">Beta</span>
     <span
-      >the family is days old and still changing. Package names, flags and keys
-      may move without notice until 1.0. Pin versions, and report what
-      breaks.</span
+      >tools may still change keys, flags or output before their 1.0; stable
+      tools follow semver. Pin versions, and report what breaks.</span
     >
     {
       stable.length > 0 && (
@@ -41,6 +39,6 @@ const stable = stableTools(catalog);
         </span>
       )
     }
-    <a href="/install/#beta">What changed</a>
+    <a href="/install/#beta">Before you install</a>
   </p>
 </aside>

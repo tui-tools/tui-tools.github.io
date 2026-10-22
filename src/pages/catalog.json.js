@@ -179,14 +179,14 @@ export function GET({ site }) {
     // `stable_from` is the release the family is declared stable at; it is null
     // until that decision is made, and the same decision removes the site's
     // beta banner. `notice` is the canonical beta sentence, the same one the banner
-    // shows and the beta tools' READMEs carry, word for word. A single tool can
+    // shows. A single tool can
     // be stable before the family is: each entry in `tools` says so in its own
     // `stability` and `stableSince`.
     family: {
       status: "beta",
       stable_from: null,
       notice:
-        "Beta: the family is days old and still changing. Package names, flags and keys may move without notice until 1.0. Pin versions, and report what breaks.",
+        "Beta tools may still change keys, flags or output before their 1.0; stable tools follow semver. Pin versions, and report what breaks.",
     },
     packages: {
       repo: pkgs.url,

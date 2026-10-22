@@ -128,36 +128,33 @@ const anyReady = managers.some((manager) => manager.ready);
           <span class="chip chip-beta">beta</span>
         </div>
         <p style="font-size:0.92rem;color:var(--muted)">
-          The first releases are days old — 29 and 30 August 2026 — and the
-          releases, the signing and the package repository pipeline were all
-          rebuilt this week. Nothing here is settled yet, so read these three
-          before running the commands below.
+          Three things worth knowing before running the commands below.
         </p>
         <ul class="beta-notes">
           <li>
-            <code>tui-tools</code> changed meaning today. It used to be the
-            metapackage that installed everything; it is now the launcher, and
-            it carries an epoch (<code>1:0.1.0</code>) so that{" "}
-            <code>apt</code>, <code>dnf</code> and <code>pacman</code> offer it
-            over the older metapackage of the same name. An upgrade on a machine
-            that already had it will replace the metapackage with the launcher.
+            <code>tui-tools</code> is the launcher, not a metapackage. It carries
+            an epoch (<code>1:</code> in front of its version) because the name
+            once belonged to a metapackage that installed everything, and the
+            epoch is what makes <code>apt</code>, <code>dnf</code> and{" "}
+            <code>pacman</code> offer the launcher over that older package. A
+            machine that still has the metapackage gets the launcher on its next
+            upgrade.
           </li>
           <li>
-            <code>tui-tools-all</code> is the new install-everything package. If
-            what you wanted was the whole family in one command, that is the
-            name to ask for now.
+            <code>tui-tools-all</code> is the install-everything package. If what
+            you want is the whole family in one command, that is the name to ask
+            for.
           </li>
           <li>
-            The repository signing key may be rotated once more before 1.0.{" "}
+            If the repository signing key is ever rotated,{" "}
             <code>install.sh</code> re-imports the current key each time it runs,
             so re-running it is the supported way through a rotation; a setup
             done by hand has to import the new key by hand.
           </li>
         </ul>
         <p style="font-size:0.92rem;color:var(--muted);margin-bottom:0">
-          Until the family is declared stable, package names, flags, keys and
-          key bindings can change without a deprecation period. Pin the versions
-          you depend on, and{" "}
+          Beta tools may still change keys, flags or output before their 1.0;
+          stable tools follow semver. Pin the versions you depend on, and{" "}
           <a href="https://github.com/tui-tools" rel="noopener">report what breaks</a>.
         </p>
         {
