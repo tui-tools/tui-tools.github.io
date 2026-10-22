@@ -1,12 +1,21 @@
 ---
 import Base from "../layouts/Base.astro";
 import CommandDialog from "../components/CommandDialog.astro";
+import catalog from "../data/catalog.json";
+
+// The newest kit tag, read by the catalog build; the fallback is the tag that
+// was current when this page last changed, for a build that could not ask.
+const kitTag = catalog.kit?.tag ?? "v0.4.4";
 
 const packages = [
   ["theme", "The Tokyo Night palette, Omarchy theme detection, NO_COLOR, and a ready-made set of Lip Gloss styles"],
   ["ui", "Header, table, help bar, help screen, status line, and the confirm / input / picker dialogs"],
   ["config", "/etc/<tool>/config.toml + ~/.config/<tool>/config.toml + environment, in that order"],
   ["runner", "Preview → confirm → run, including privilege escalation, timeouts and a fake for --demo and tests"],
+  ["compat", "Which backend version the tool is driving and whether the lab ever tested it, from the manifest's backends list"],
+  ["manifest", "Reads the tool.json the binary embeds, so the header, the README and this site share one source"],
+  ["pkgmgr", "Which package manager runs here, whether the family's repository is set up, and the exact commands to change that"],
+  ["report", "The --report block for bug reports: tool, kit and backend versions plus the machine facts, with no host or user names"],
 ];
 ---
 
@@ -41,7 +50,7 @@ const packages = [
       <div class="hero-aside">
         <CommandDialog
           title="Add it to a Go module"
-          command="go get github.com/tui-tools/tui-kit@v0.1.2"
+          command={`go get github.com/tui-tools/tui-kit@${kitTag}`}
         />
         <p style="color:var(--muted);font-size:0.9rem;margin:0">
           Dependencies are deliberately small: Bubble Tea, Bubbles and Lip Gloss,
@@ -144,9 +153,9 @@ const packages = [
           the screenshots, and tag <code>v0.1.0</code>.
         </p>
         <p style="margin-bottom:0">
-          This site picks the tool up on its next build — hourly, or immediately
-          when the release workflow tells it a release shipped. Nothing here is
-          edited by hand to add a tool.
+          This site picks the tool up on its next build, which runs every hour,
+          so a new tool or release shows up here within the hour. Nothing here
+          is edited by hand to add a tool.
         </p>
       </div>
     </section>

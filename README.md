@@ -167,11 +167,11 @@ probe is the tool's business, not the website's.
 
 The canonical sentence is:
 
-> Beta: the family is days old and still changing. Package names, flags and
-> keys may move without notice until 1.0. Pin versions, and report what breaks.
+> Beta tools may still change keys, flags or output before their 1.0; stable
+> tools follow semver. Pin versions, and report what breaks.
 
-The tool READMEs carry it word for word, so it is changed everywhere at once or
-nowhere. The site says it in four places: the banner under
+The beta tool READMEs carry the kit's own beta note, rendered by
+`tui-kit/tools/render-install.py`; keep the two saying the same thing. The site says it in four places: the banner under
 the masthead on every page (`src/components/BetaBanner.astro`, rendered by
 `src/layouts/Base.astro`), the **Before you install** panel on the install page
 (`#beta`), the `beta` chip beside every version

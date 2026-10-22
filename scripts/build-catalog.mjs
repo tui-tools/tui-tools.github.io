@@ -149,6 +149,23 @@ async function parseChecksums(asset) {
   return sums;
 }
 
+/**
+ * The newest semver tag of tui-kit, which the kit page quotes in its
+ * `go get` line. The kit is a library: it is tagged, not released, so the
+ * tags are read and sorted here rather than trusting the API's order. Null
+ * when nothing could be read, and the page falls back to its own value.
+ */
+async function latestKitTag() {
+  const tags = await get(`${API}/repos/${ORG}/tui-kit/tags?per_page=100`);
+  if (!Array.isArray(tags)) return null;
+  const parsed = tags
+    .map((tag) => tag.name.match(/^v(\d+)\.(\d+)\.(\d+)$/))
+    .filter(Boolean)
+    .map((match) => ({ tag: match[0], parts: match.slice(1).map(Number) }));
+  parsed.sort((a, b) => b.parts[0] - a.parts[0] || b.parts[1] - a.parts[1] || b.parts[2] - a.parts[2]);
+  return parsed[0]?.tag ?? null;
+}
+
 /** The latest published release, or null when the tool has never shipped. */
 async function latestRelease(repo) {
   const release = await get(`${API}/repos/${ORG}/${repo.name}/releases/latest`);
@@ -586,10 +603,13 @@ async function main() {
     return a.name.localeCompare(b.name);
   });
 
+  const kitTag = await latestKitTag();
+
   const catalog = {
     generatedAt: new Date().toISOString(),
     org: ORG,
     pkgs: { url: pkgsUrl, live: pkgsLive },
+    kit: { tag: kitTag },
     tools,
     companions,
     categories: [...new Set(tools.map((tool) => tool.category))].sort(),
