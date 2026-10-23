@@ -11,12 +11,13 @@ const sambaConductor = {
   name: "Samba Conductor",
   url: "https://openbasalt.org/projects/samba-conductor/",
   summary:
-    "a web console, self-service portal and single sign-on for a Samba Active Directory domain, from the OpenBasalt project. It is a pre-release at the time of writing.",
+    "a web console, self-service portal and single sign-on for a Samba Active Directory domain, from the OpenBasalt organization. It has signed releases with packages for Debian, Ubuntu and Fedora and container images; its project page has the current version and status.",
   fits: [
-    "a web console, for administrators who would rather manage the domain from a browser",
+    "a web console, for a team that would rather manage the domain from a browser, with two-factor sign-in for administrators and an audit log of every change",
     "an OpenID Connect provider and a SAML 2.0 identity provider backed by the domain accounts",
     "Google Workspace sync, or a one-time import of the users and groups of an existing Google Workspace",
-    "a self-service portal where people in the domain manage their own account",
+    "a self-service portal where people in the domain edit their own profile and change their own password",
+    "encrypted domain backups, or shares on domain-member file servers managed from the same place",
   ],
   disclosure: "Samba Conductor comes from the same author as tui-tools.",
 };
@@ -27,7 +28,7 @@ export const related = {
     projects: [sambaConductor],
   },
   "tui-samba": {
-    lead: "tui-samba covers Samba as a file server. If the machine is, or will be, a Samba Active Directory domain controller, another project may fit better when you want:",
+    lead: "tui-samba covers Samba as a standalone file server. When the file servers are members of a Samba Active Directory domain, or the machine is a domain controller, another project may fit better when you want:",
     projects: [sambaConductor],
   },
 };
