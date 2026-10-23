@@ -9,6 +9,7 @@ import { publishedGuides, guideDate, isoDay } from "../../lib/guides.js";
 import { toolDescription, toolIntro, toolTitle } from "../../lib/seo.js";
 import { breadcrumbList, softwareApplication } from "../../lib/jsonld.js";
 import { joinWithOr, upstreamNames } from "../../lib/upstream.js";
+import { relatedFor } from "../../data/related.js";
 
 export function getStaticPaths() {
   return catalog.tools.map((tool) => ({ params: { name: tool.name }, props: { tool } }));
@@ -34,6 +35,11 @@ const intro = toolIntro(tool);
 const guides = (await publishedGuides()).filter((guide) =>
   guide.data.tools.includes(tool.name),
 );
+
+// A project outside the family that may fit some readers better, written by
+// hand in src/data/related.js. Most tools have none, and then the section is
+// absent.
+const related = relatedFor({ name: tool.name });
 
 const structuredData = [
   softwareApplication({ tool, site: Astro.site, description: seoDescription }),
@@ -439,6 +445,35 @@ const checks = [
               </li>
             ))}
           </ul>
+        </section>
+      )
+    }
+
+    {
+      related && (
+        <section class="section" id="related" style="padding-top:1rem">
+          <div class="section-head">
+            <h2>When another project fits better</h2>
+          </div>
+          {related.projects.map((project) => (
+            <article class="card guide-card">
+              <div class="guide-card-body">
+                <p>{related.lead}</p>
+                <ul>
+                  {project.fits.map((fit) => (
+                    <li>{fit}</li>
+                  ))}
+                </ul>
+                <p>
+                  That is <a href={project.url}>{project.name}</a>,{" "}
+                  {project.summary}
+                </p>
+                {project.disclosure && (
+                  <p class="install-note">{project.disclosure}</p>
+                )}
+              </div>
+            </article>
+          ))}
         </section>
       )
     }
