@@ -40,8 +40,10 @@ const DISTRO_CHANNELS = ["pacman", "apt", "dnf"];
  * place the lines are written, and it is not this file.
  *
  * apt takes a sources line, pacman takes a Server line, and dnf takes neither:
- * its repository is a .repo file the setup downloads, so the file's URL is the
- * honest answer for that channel.
+ * its repository is a .repo file. The setup writes that file itself (so the
+ * key it names is the checked local one), and the repository also serves the
+ * same file next to the packages, at the rpm directory the setup's baseurl
+ * names. That URL is the answer for this channel, as it always was.
  */
 function repositoryLines(tools) {
   const manual = (id) => {
@@ -54,11 +56,11 @@ function repositoryLines(tools) {
 
   const deb = manual("apt")?.match(/"(deb \[signed-by=[^"]+)"/);
   const arch = manual("pacman")?.match(/Server = ([^\s\\]+)/);
-  const rpm = manual("dnf")?.match(/-o \/etc\/yum\.repos\.d\/\S+ (\S+)/);
+  const rpm = manual("dnf")?.match(/'baseurl=(\S+)\/\$basearch'/);
 
   return {
     deb: deb ? deb[1] : null,
-    rpm: rpm ? rpm[1] : null,
+    rpm: rpm ? `${rpm[1]}/tui-tools.repo` : null,
     arch: arch ? `Server = ${arch[1]}` : null,
   };
 }

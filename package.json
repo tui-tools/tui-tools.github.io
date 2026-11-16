@@ -10,7 +10,8 @@
     "dev": "npm run catalog && npm run og && astro dev",
     "build": "npm run catalog && npm run og && astro build",
     "build:only": "astro build",
-    "preview": "astro preview"
+    "preview": "astro preview",
+    "test": "node --test scripts/manual-setup.test.mjs"
   },
   "devDependencies": {
     "@astrojs/mdx": "^8.1.0",
