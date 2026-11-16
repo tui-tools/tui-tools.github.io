@@ -322,6 +322,19 @@ const anyReady = managers.some((manager) => manager.ready);
               </div>
               {manager.setup && (
                 <p class="install-note">
+                  The first lines check the signing key: go on only if they
+                  print <code>key OK</code>.
+                  {manager.id === "dnf" && (
+                    <>
+                      {" "}dnf then asks to import the key for the repository
+                      index: answer <code>y</code> if the fingerprint it shows
+                      is <code>{manager.setup.fingerprint}</code>.
+                    </>
+                  )}
+                </p>
+              )}
+              {manager.setup && (
+                <p class="install-note">
                   One setup per machine. After it, every tool in the family is a{" "}
                   <code>{manager.manager}</code> away, and upgrades come with the
                   rest of your system updates.

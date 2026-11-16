@@ -26,6 +26,7 @@
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { KEY_FINGERPRINT, MANUAL_SETUP } from "./manual-setup.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const ORG = process.env.TUI_ORG ?? "tui-tools";
@@ -52,29 +53,9 @@ const PACKAGE_SUFFIX = {
   pacman: ".pkg.tar.zst",
 };
 
-/**
- * The one-time repository setup, by hand, per package manager. Deliberately
- * the same commands tui-kit's render-install.py writes into every README: a
- * reader who compares the two has to find them identical.
- */
-const MANUAL_SETUP = {
-  apt: (repo) => `sudo install -d -m 0755 /etc/apt/keyrings
-curl -fsSL ${repo}/pubkey.asc \\
-  | sudo gpg --dearmor -o /etc/apt/keyrings/tui-tools.gpg
-echo "deb [signed-by=/etc/apt/keyrings/tui-tools.gpg] ${repo}/deb stable main" \\
-  | sudo tee /etc/apt/sources.list.d/tui-tools.list
-sudo apt update`,
-  dnf: (repo) => `sudo rpm --import ${repo}/pubkey.asc
-sudo curl -fsSL -o /etc/yum.repos.d/tui-tools.repo ${repo}/rpm/tui-tools.repo
-sudo dnf makecache`,
-  pacman: (repo) => `curl -fsSL -o /tmp/tui-tools.asc ${repo}/pubkey.asc
-sudo pacman-key --add /tmp/tui-tools.asc
-sudo pacman-key --lsign-key \\
-  "$(gpg --show-keys --with-colons /tmp/tui-tools.asc | awk -F: '/^fpr:/{print $10; exit}')"
-printf '[tui-tools]\\nServer = ${repo}/arch/$arch\\n' \\
-  | sudo tee -a /etc/pacman.conf
-sudo pacman -Sy`,
-};
+// The one-time repository setup, by hand, per package manager, lives in
+// manual-setup.mjs: the same lines pkgs.tui.tools prints, starting with the
+// download-and-check of the signing key against its pinned fingerprint.
 
 function headers(accept = "application/vnd.github+json") {
   const h = {
@@ -307,6 +288,9 @@ function buildInstall(manifest, release, pkgsLive) {
         ? {
             oneLiner: `curl -fsSL ${repoUrl}/install.sh | sh`,
             manual: MANUAL_SETUP[id](repoUrl),
+            // The fingerprint the manual setup checks, shown beside it so
+            // the reader can answer dnf's own key question.
+            fingerprint: KEY_FINGERPRINT,
             repoUrl,
           }
         : null;

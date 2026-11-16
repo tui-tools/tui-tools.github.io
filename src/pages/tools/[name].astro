@@ -573,6 +573,18 @@ const checks = [
                     manager={`${entry.id}-manual`}
                     soon={!entry.available}
                   />
+                  <p class="install-note">
+                    The first lines check the signing key: go on only if they
+                    print <code>key OK</code>.
+                    {entry.id === "dnf" && (
+                      <>
+                        {" "}dnf then asks to import the key for the
+                        repository index: answer <code>y</code> if the
+                        fingerprint it shows is{" "}
+                        <code>{entry.setup.fingerprint}</code>.
+                      </>
+                    )}
+                  </p>
                 </details>
               </div>
             )}
