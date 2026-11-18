@@ -3,13 +3,21 @@ import Base from "../layouts/Base.astro";
 import CommandDialog from "../components/CommandDialog.astro";
 import catalog from "../data/catalog.json";
 import { versioned, rolling, policy } from "../data/support.js";
-import { STABILITY_DOC, stableTools } from "../lib/stability.js";
+import { FAMILY_STATES, STABILITY_DOC, familyNotice, familyStatus, stableTools } from "../lib/stability.js";
 
 const tools = catalog.tools.filter((tool) => !tool.unreleased);
 
 // The tools already promoted past beta, named from their manifests so this
 // page never lists one by hand.
 const stable = stableTools(catalog);
+
+// Where the family stands, from the same function as the site-wide line and
+// `family.notice` in /catalog.json: the beta panel while half of the tools or
+// fewer are stable, a plain status sentence naming the beta tools once more
+// than half are, and only the link to the bar when every tool is.
+const status = familyStatus(catalog);
+const notice = familyNotice(status);
+const isBeta = status.state === FAMILY_STATES.BETA;
 const anyName = tools[0]?.name ?? "tui-firewall";
 
 // Whether the package repository actually answers is decided once, at build
@@ -122,10 +130,10 @@ const anyReady = managers.some((manager) => manager.ready);
     </section>
 
     <section class="section" style="padding-top:0" id="beta">
-      <div class="panel panel-beta">
+      <div class={isBeta ? "panel panel-beta" : "panel"}>
         <div class="section-head" style="margin-bottom:0.75rem">
           <h2 style="margin:0">Before you install</h2>
-          <span class="chip chip-beta">beta</span>
+          {isBeta && <span class="chip chip-beta">beta</span>}
         </div>
         <p style="font-size:0.92rem;color:var(--muted)">
           Three things worth knowing before running the commands below.
@@ -152,13 +160,17 @@ const anyReady = managers.some((manager) => manager.ready);
             done by hand has to import the new key by hand.
           </li>
         </ul>
-        <p style="font-size:0.92rem;color:var(--muted);margin-bottom:0">
-          Beta tools may still change keys, flags or output before their 1.0;
-          stable tools follow semver. Pin the versions you depend on, and{" "}
-          <a href="https://github.com/tui-tools" rel="noopener">report what breaks</a>.
-        </p>
         {
-          stable.length > 0 && (
+          isBeta && (
+            <p style="font-size:0.92rem;color:var(--muted);margin-bottom:0">
+              Beta tools may still change keys, flags or output before their 1.0;
+              stable tools follow semver. Pin the versions you depend on, and{" "}
+              <a href="https://github.com/tui-tools" rel="noopener">report what breaks</a>.
+            </p>
+          )
+        }
+        {
+          isBeta && stable.length > 0 && (
             <p style="font-size:0.92rem;color:var(--muted);margin:0.75rem 0 0">
               Most tools are still beta. Stable, with keys, flags and{" "}
               <code>--check</code> JSON that change only in a major release:{" "}
@@ -169,6 +181,29 @@ const anyReady = managers.some((manager) => manager.ready);
                 </>
               ))}
               .{" "}
+              <a href={STABILITY_DOC} rel="noopener">What stable means</a>.
+            </p>
+          )
+        }
+        {
+          status.state === FAMILY_STATES.MOSTLY_STABLE && (
+            <p style="font-size:0.92rem;color:var(--muted);margin-bottom:0">
+              {notice} Still beta:{" "}
+              {status.beta.map((tool, index) => (
+                <>
+                  {index > 0 && ", "}
+                  <a href={`/tools/${tool.name}/`}>{tool.name}</a>
+                </>
+              ))}
+              . Pin the versions you depend on, and{" "}
+              <a href="https://github.com/tui-tools" rel="noopener">report what breaks</a>.{" "}
+              <a href={STABILITY_DOC} rel="noopener">What stable means</a>.
+            </p>
+          )
+        }
+        {
+          status.state === FAMILY_STATES.STABLE && (
+            <p style="font-size:0.92rem;color:var(--muted);margin-bottom:0">
               <a href={STABILITY_DOC} rel="noopener">What stable means</a>.
             </p>
           )

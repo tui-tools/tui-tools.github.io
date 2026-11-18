@@ -165,22 +165,53 @@ probe is the tool's business, not the website's.
 
 ## The beta notice
 
-The canonical sentence is:
+What the site says about the family's stability is computed from the catalog,
+by `familyStatus` and `familyNotice` in `src/lib/stability.js`. Nobody edits a
+sentence when a tool is promoted. The count covers the released tools, without
+the `tui-tools` launcher, which lists the tools rather than being one of them.
+A tool counts as stable when its manifest says `stability: stable` with a
+`stableSince`, as described in tui-kit's
+[docs/stability.md](https://github.com/tui-tools/tui-kit/blob/main/docs/stability.md).
 
-> Beta tools may still change keys, flags or output before their 1.0; stable
-> tools follow semver. Pin versions, and report what breaks.
+There are three states.
+
+- Half of the tools or fewer are stable. The site carries the beta notice, and
+  its sentence is:
+
+  > Beta tools may still change keys, flags or output before their 1.0; stable
+  > tools follow semver. Pin versions, and report what breaks.
+
+- More than half are stable. There is no beta banner. A plain status line takes
+  its place, for example "11 of 19 tools are stable and follow semver; the other
+  8 are still beta and may change keys, flags or output before their 1.0.",
+  followed by the beta tools, each linked to its page, and a link to what stable
+  means. Every released beta tool's own page shows a beta note under its header,
+  so a reader who lands there directly still sees it.
+- Every tool is stable. There is no notice. The link to what stable means stays
+  on the install page and on every stable chip.
+
+Exactly half stable is still the first state; one more tool moves the family to
+the second. `npm test` covers the three states and that boundary.
+
+The sentence of the current state appears in these places, all fed by the same
+two functions:
+
+- the line under the masthead on every page (`src/components/BetaBanner.astro`,
+  rendered by `src/layouts/Base.astro`);
+- the Before you install panel on the install page (`#beta`);
+- `family.notice` in `/catalog.json` (`src/pages/catalog.json.js`). It is always
+  a string, and empty when every tool is stable. Next to it, `family.total`,
+  `family.stable` and `family.beta` give the count of tools, the count of stable
+  ones and the names of the beta ones. `family.status` is `beta` until every
+  tool is stable, then `stable`.
+
+The `beta` or `Stable since` chip beside every version
+(`src/components/VersionChip.astro`, used by the grid card and the tool page)
+always shows the tool's own state, whatever the family's.
 
 The beta tool READMEs carry the kit's own beta note, rendered by
-`tui-kit/tools/render-install.py`; keep the two saying the same thing. The site says it in four places: the banner under
-the masthead on every page (`src/components/BetaBanner.astro`, rendered by
-`src/layouts/Base.astro`), the **Before you install** panel on the install page
-(`#beta`), the `beta` chip beside every version
-(`src/components/VersionChip.astro`, used by the grid card and the tool page),
-and the `family` block in `/catalog.json`
-(`src/pages/catalog.json.js`). Removing them is a deliberate 1.0 decision, made
-once for all four together, not a cleanup: until it is made, they are the only
-thing telling a reader that a package name or a key binding can move under
-them.
+`tui-kit/tools/render-install.py`. It is a note about that one tool, so it keeps
+the beta sentence in every state.
 
 ## Adding a tool to the site
 

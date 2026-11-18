@@ -11,7 +11,7 @@
     "build": "npm run catalog && npm run og && astro build",
     "build:only": "astro build",
     "preview": "astro preview",
-    "test": "node --test scripts/manual-setup.test.mjs"
+    "test": "node --test scripts/manual-setup.test.mjs src/lib/stability.test.mjs"
   },
   "devDependencies": {
     "@astrojs/mdx": "^8.1.0",

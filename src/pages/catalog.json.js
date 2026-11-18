@@ -25,6 +25,7 @@
  * a preview host points at that host and never at the production one.
  */
 import catalog from "../data/catalog.json";
+import { FAMILY_STATES, familyNotice, familyStatus } from "../lib/stability.js";
 
 /** The tool name a program is allowed to act on. Anything else is not ours. */
 const NAME = /^tui-[a-z]+$/;
@@ -171,24 +172,35 @@ export function GET({ site }) {
 
   const pkgs = catalog.pkgs ?? { url: "https://pkgs.tui.tools", live: false };
   const lines = repositoryLines(catalog.tools);
+  const familyState = familyStatus(catalog);
 
   const body = {
     schema: 1,
     generated: catalog.generatedAt,
     // The family's own status, for a program that has to decide whether to
     // trust the names below to stay put. Additive, so `schema` does not move:
-    // a reader that does not know this field is no worse off than before.
-    // `stable_from` is the release the family is declared stable at; it is null
-    // until that decision is made, and the same decision removes the site's
-    // beta banner. `notice` is the canonical beta sentence, the same one the banner
-    // shows. A single tool can
-    // be stable before the family is: each entry in `tools` says so in its own
-    // `stability` and `stableSince`.
+    // a reader that does not know a field is no worse off than before.
+    //
+    // `notice` is the family's one canonical sentence, the same one the site's
+    // status line shows, and it is always a string. While half of the tools or
+    // fewer are stable it is the beta sentence; once more than half are, it
+    // says how many are stable and that the rest are still beta; when every
+    // tool is stable it is empty, because there is nothing left to warn about.
+    // `status` is "beta" until every tool is stable, then "stable".
+    // `stable_from` is the release the family is declared stable at; it is a
+    // decision rather than a count, and stays null until that decision is made.
+    //
+    // `total`, `stable` and `beta` are the numbers the sentence comes from: the
+    // tools the family counts (released, launcher excluded), how many of them
+    // are stable, and the names of the ones still beta. Each entry in `tools`
+    // still says its own state in `stability` and `stableSince`.
     family: {
-      status: "beta",
+      status: familyState.state === FAMILY_STATES.STABLE ? "stable" : "beta",
       stable_from: null,
-      notice:
-        "Beta tools may still change keys, flags or output before their 1.0; stable tools follow semver. Pin versions, and report what breaks.",
+      notice: familyNotice(familyState),
+      total: familyState.total,
+      stable: familyState.stable.length,
+      beta: familyState.beta.map((tool) => tool.name),
     },
     packages: {
       repo: pkgs.url,
