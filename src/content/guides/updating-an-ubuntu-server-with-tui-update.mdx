@@ -1,0 +1,193 @@
+---
+title: Updating an Ubuntu server with tui-update, one package held back
+description: Fifty updates pending, most of them security fixes, a kernel among them, and one package you would rather not move today. One walk through tui-update over SSH, from holding that package to the plan, the non-interactive upgrade and the reboot it owes.
+seoTitle: "Hold a package and upgrade an Ubuntu server with tui-update"
+seoDescription: "See pending apt updates, hold a package with apt-mark, read the plan and apt's dry run, upgrade without prompts, and reboot only when you confirm it."
+cover: "/tools/tui-update/tui-update-plan.png"
+date: 2026-11-18
+tools:
+  - tui-update
+draft: false
+---
+
+import CommandDialog from "../../components/CommandDialog.astro";
+import OutputBlock from "../../components/OutputBlock.astro";
+import Screenshot from "../../components/Screenshot.astro";
+
+Everything below was run on 2026-11-18 on an Ubuntu 24.04.5 LTS virtual
+machine from the stock cloud image (apt 2.8.3, needrestart installed), with a
+build of tui-update from its main branch ahead of 1.0.0. The image had fallen
+behind on its updates, which is the point: 50 were pending. The tool ran as an
+ordinary user, `lab`, in a terminal reached over SSH, and escalated with
+`sudo -n`. The screens and dialogs are copied from the terminal, without the
+dialog borders and with the runs of spaces in wide tables shortened; nothing in
+them was retyped. The screenshot is the tool's own, from `--demo`.
+
+## Install and open it
+
+<CommandDialog
+  title="On Debian and Ubuntu, after the one-time repository setup"
+  command="sudo apt install tui-update"
+  tool="tui-update"
+  manager="apt"
+/>
+
+The repository setup is on the [install page](/install/). tui-update reads the
+package lists as they are when it opens (the upgrade itself refreshes them as
+its first step), so refresh them first if they are old:
+
+<CommandDialog title="Refresh the lists" command="sudo -n apt-get update -qq" />
+
+<CommandDialog title="Then open it" command="tui-update" />
+
+<OutputBlock
+  title="tui-update, four of the 50 rows"
+  body={` tui-update  apt via /usr/bin/sudo -n on ubuntu
+ updates: 50 pending   security: 38   restart: reboot   snapshot: no   backend: apt 2.8.3
+ PACKAGE                          CURRENT → NEW                                      REPO           SEC
+ linux-headers-generic.amd64 ·k   6.8.0-147.147 → 6.8.0-149.149                      noble-updates… yes
+ linux-image-virtual.amd64 ·k     6.8.0-147.147 → 6.8.0-149.149                      noble-updates… yes
+ libc6.amd64 ·c                   2.39-0ubuntu8.9 → 2.39-0ubuntu8.12                 noble-updates… yes
+ cloud-init.all                   26.1-0ubuntu1~24.04.1 → 26.2-0ubuntu1~24.04.2      noble-updates  —`}
+/>
+
+`·k` marks a kernel and `·c` a core library: the two kinds of package that
+decide whether the machine needs a reboot afterwards. `restart: reboot` in the
+header is that verdict for the whole list.
+
+## Hold one package back (`H`)
+
+`/` and `cloud-init` filter the list down to one row. `H` on it:
+
+<OutputBlock
+  title="H on cloud-init"
+  body={`Hold cloud-init at its installed version, so no upgrade touches it until the hold is lifted
+Hold cloud-init at its installed version, so no upgrade touches it until the hold is lifted.
+A held package stops receiving updates, security fixes included, until the hold is lifted.
+How: held with \`apt-mark hold\`, which is the dpkg selection every apt front end honours.
+Command to run:
+$ /usr/bin/sudo -n /usr/bin/setsid -w apt-mark hold cloud-init`}
+/>
+
+After `y`, the status line said `cloud-init set on hold.` and `apt-mark
+showhold` printed `cloud-init`. `H` on the same row lifts it.
+
+## The plan (`enter`)
+
+`/` and an empty filter bring the whole list back. `enter` shows what applying
+it would do, before anything runs:
+
+<OutputBlock
+  title="enter, the plan (abridged: the reasons, the notes and the start of the dry run left out)"
+  body={`Upgrade 50 package(s) with apt, 38 of them security fixes
+Restart classification
+  class          reboot
+  decided by     needrestart -b
+Upgrade mode
+  upgrade  (m cycles: upgrade → dist-upgrade)
+Snapshot before
+  snapshot before: no
+  snapper has no root configuration, so the root subvolume cannot be snapshotted
+The commands, in order
+  1. /usr/bin/sudo -n /usr/bin/setsid -w apt-get update
+     Refresh the apt package lists
+  2. /usr/bin/sudo -n /usr/bin/setsid -w env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get -y -o Dpkg::Options::=--force-confdef -o Dpkg::Options…
+  3. (nothing) — tui-update never reboots by itself
+apt dry run
+  The following upgrades have been deferred due to phasing:
+    snapd
+  The following packages have been kept back:
+    cloud-init linux-headers-generic linux-headers-virtual linux-image-virtual
+    linux-virtual
+  The following packages will be upgraded:
+    apt apt-utils bind9-dnsutils bind9-host bind9-libs ca-certificates`}
+/>
+
+Read the dry run, not only the headline. `upgrade` adds and removes nothing,
+so it keeps back the kernel metapackages, whose new versions need new
+packages, as well as the held one; and apt holds `snapd` back on purpose
+while Ubuntu phases its rollout. The headline still counts all 50, and the
+reboot reason names the kernel; that is filed as
+[tui-update#35](https://github.com/tui-tools/tui-update/issues/35). `m` switches
+to `dist-upgrade`, which would take the kernel too.
+
+<Screenshot tool="tui-update" file="tui-update-plan.png" />
+
+## Apply it (`U`)
+
+<OutputBlock
+  title="U"
+  body={`Upgrade 50 package(s) with apt, 38 of them security fixes
+No snapshot: snapper has no root configuration, so the root subvolume cannot be snapshotted.
+apt asks nothing: debconf takes its defaults, needrestart restarts the services left on replaced libraries, and a config file changed on this machine
+keeps the local version, and the package's new one is left beside it as .dpkg-dist.
+tui-update never reboots by itself.
+Command to run:
+$ /usr/bin/sudo -n /usr/bin/setsid -w apt-get update
+$ /usr/bin/sudo -n /usr/bin/setsid -w env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get -y -o Dpkg::Options::=--force-confdef -o
+  Dpkg::Options::=--force-confold upgrade`}
+/>
+
+After `y` the output scrolls on the same screen. Nothing stops to ask: no
+debconf question and no needrestart menu, which is what a terminal that is
+not there would otherwise wait on forever. It ended on:
+
+<OutputBlock
+  title="The end of the run"
+  body={` No VM guests are running outdated hypervisor (qemu) binaries on this host.
+ ✓ done
+ The sequence finished. A reboot is needed afterwards: linux-headers-generic 6.8.0-147.147 → 6.8.0-149.149; linux-headers-virtual 6.8.0-147.147 → 6.8.0-149.14…
+ j/k scroll  R reboot  esc back
+ upgrade finished`}
+/>
+
+## The reboot, only when you say so (`R`)
+
+<OutputBlock
+  title="R"
+  body={`Reboot the machine
+The upgrade replaced code nothing running will pick up until the machine has restarted.
+Why: linux-headers-generic 6.8.0-147.147 → 6.8.0-149.149; linux-headers-virtual 6.8.0-147.147 → 6.8.0-149.149; linux-image-virtual 6.8.0-147.147 →
+6.8.0-149.149; libc-bin 2.39-0ubuntu8.9 → 2.39-0ubuntu8.12; libc6 2.39-0ubuntu8.9 → 2.39-0ubuntu8.12; zlib1g 1:1.3.dfsg-3.1ubuntu2.2 →
+1:1.3.dfsg-3.1ubuntu2.3
+Every session on this machine, including this one, ends here.
+Command to run:
+$ /usr/bin/sudo -n /usr/bin/setsid -w systemctl reboot`}
+/>
+
+The reboot was owed: `/var/run/reboot-required.pkgs` named `libc6`. The
+kernel lines in the reason are the ones apt kept back (see above). After `y`
+and the reboot:
+
+<CommandDialog
+  title="After the reboot"
+  command={`ls /var/run/reboot-required; apt-mark showhold; tui-update --check | grep -E '"(backend|pending|security|restart|rebootRequired|holds)"'`}
+/>
+
+<OutputBlock
+  title="Its output"
+  body={`ls: cannot access '/var/run/reboot-required': No such file or directory
+cloud-init
+  "backend": "apt",
+  "pending": 6,
+  "security": 4,
+  "rebootRequired": false,
+  "restart": "reboot",
+  "holds": 1,
+    "backend": "apt",`}
+/>
+
+The second `backend` line is the one inside the `compat` block. Six left: the
+held package, the four kernel metapackages `upgrade` keeps
+back, and the phased one. `restart: reboot` is what applying those would
+need; `rebootRequired: false` says nothing is owed now.
+
+## What this does not show
+
+- dnf (Fedora) and pacman (Omarchy Server), where the same keys drive the
+  machine's own manager, and Omarchy's updater is handed the terminal.
+- The `security` mode (dnf), the snapshot step on a machine with a snapper
+  root configuration, history (`h`) and the unattended-update timers (`t`).
+
+More on every screen is on the [tui-update page](/tools/tui-update/) and in
+the [README](https://github.com/tui-tools/tui-update/blob/main/README.md).
