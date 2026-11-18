@@ -1,44 +1,74 @@
 ---
-// The site-wide beta notice. It is deliberately plain: one line, no JavaScript,
-// no dismiss button. Most of the family is still beta, and a beta tool's keys,
-// flags and output can still change before its 1.0, so a reader who never
-// scrolls should still leave the page knowing that. It goes away when the
-// family is declared stable, and that removal is a 1.0 decision, not a tidy-up.
+// The site-wide status notice, under the masthead on every page. It is
+// deliberately plain: one line, no JavaScript, no dismiss button. What it says
+// follows from the catalog (see familyStatus in src/lib/stability.js), so it
+// stays true as tools are promoted without anyone editing this file.
 //
-// The sentence is canonical: /catalog.json serves it as `family.notice`, so the
-// two are changed together or not at all. The banner shows "Beta" as its own tag and the rest as the line,
-// which reads as the same sentence with its first word set apart.
+// - While half of the tools or fewer are stable, it is the beta banner: a
+//   warning-toned line tagged "Beta", because a beta tool's keys, flags and
+//   output can still change before its 1.0 and a reader who never scrolls
+//   should still leave the page knowing that. The stable tools, if any, are
+//   named after the sentence.
+// - Once more than half are stable, a warning would overstate it. The line
+//   becomes a calm status line that says how many tools are stable and names,
+//   with links, the ones still beta. Each beta tool's own page still says beta
+//   on its own, for a reader who lands there directly.
+// - When every tool is stable, there is nothing to say and nothing renders.
 //
-// A tool can leave beta before the family does. When one has, the banner names
-// it after the sentence, read from the catalog, so the line stays true without
-// anyone editing it when the next tool is promoted.
+// The sentence is canonical: /catalog.json serves the same one as
+// `family.notice`, from the same function. In the beta state the banner shows
+// "Beta" as its own tag and the rest as the line, which reads as the same
+// sentence with its first word set apart.
 import catalog from "../data/catalog.json";
-import { STABILITY_DOC, stableTools } from "../lib/stability.js";
+import { FAMILY_STATES, STABILITY_DOC, familyNotice, familyStatus, stableTools } from "../lib/stability.js";
 
+const status = familyStatus(catalog);
+const notice = familyNotice(status);
 const stable = stableTools(catalog);
 ---
 
-<aside class="beta-banner" aria-label="Project status">
-  <p class="page beta-banner-inner">
-    <span class="beta-banner-tag">Beta</span>
-    <span
-      >tools may still change keys, flags or output before their 1.0; stable
-      tools follow semver. Pin versions, and report what breaks.</span
-    >
-    {
-      stable.length > 0 && (
-        <span class="beta-banner-stable">
-          Stable, and following semver:{" "}
-          {stable.map((tool, index) => (
-            <>
-              {index > 0 && ", "}
-              <a href={`/tools/${tool.name}/`}>{tool.name}</a> since {tool.since}
-            </>
-          ))}
-          . <a href={STABILITY_DOC} rel="noopener">What stable means</a>
-        </span>
-      )
-    }
-    <a href="/install/#beta">Before you install</a>
-  </p>
-</aside>
+{
+  status.state === FAMILY_STATES.BETA && (
+    <aside class="beta-banner" aria-label="Project status">
+      <p class="page beta-banner-inner">
+        <span class="beta-banner-tag">Beta</span>
+        <span
+          >tools may still change keys, flags or output before their 1.0; stable
+          tools follow semver. Pin versions, and report what breaks.</span
+        >
+        {
+          stable.length > 0 && (
+            <span class="beta-banner-stable">
+              Stable, and following semver:{" "}
+              {stable.map((tool, index) => (
+                <>
+                  {index > 0 && ", "}
+                  <a href={`/tools/${tool.name}/`}>{tool.name}</a> since {tool.since}
+                </>
+              ))}
+              . <a href={STABILITY_DOC} rel="noopener">What stable means</a>
+            </span>
+          )
+        }
+        <a href="/install/#beta">Before you install</a>
+      </p>
+    </aside>
+  )
+}
+{
+  status.state === FAMILY_STATES.MOSTLY_STABLE && (
+    <aside class="status-line" aria-label="Project status">
+      <p class="page status-line-inner">
+        {notice} Still beta:{" "}
+        {status.beta.map((tool, index) => (
+          <>
+            {index > 0 && ", "}
+            <a href={`/tools/${tool.name}/`}>{tool.name}</a>
+          </>
+        ))}
+        .{" "}
+        <a href={STABILITY_DOC} rel="noopener">What stable means</a>.
+      </p>
+    </aside>
+  )
+}

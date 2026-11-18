@@ -2,7 +2,7 @@
 import Base from "../../layouts/Base.astro";
 import CommandDialog from "../../components/CommandDialog.astro";
 import VersionChip from "../../components/VersionChip.astro";
-import { isStable } from "../../lib/stability.js";
+import { FAMILY_STATES, STABILITY_DOC, familyStatus, isStable } from "../../lib/stability.js";
 import catalog from "../../data/catalog.json";
 import { renderDescription, renderInline } from "../../lib/markdown.js";
 import { publishedGuides, guideDate, isoDay } from "../../lib/guides.js";
@@ -40,6 +40,15 @@ const guides = (await publishedGuides()).filter((guide) =>
 // hand in src/data/related.js. Most tools have none, and then the section is
 // absent.
 const related = relatedFor({ name: tool.name });
+
+// While the family is mostly beta, the site-wide banner already tells every
+// reader that a beta tool can still change. Once more than half of the tools
+// are stable, that banner becomes a calm status line, so a released beta tool
+// says it here, on its own page, for a reader who lands on it directly.
+const betaNote =
+  !tool.unreleased &&
+  !isStable(tool) &&
+  familyStatus(catalog).state !== FAMILY_STATES.BETA;
 
 const structuredData = [
   softwareApplication({ tool, site: Astro.site, description: seoDescription }),
@@ -176,6 +185,20 @@ const checks = [
         <span class="chip">{tool.license}</span>
       </div>
     </header>
+
+    {
+      betaNote && (
+        <p class="tool-beta-note">
+          <span class="tool-beta-note-tag">Beta</span>
+          <span>
+            {tool.name} may still change keys, flags or output before its 1.0.
+            Pin the version you depend on, and{" "}
+            <a href={`${tool.repo}/issues`} rel="noopener">report what breaks</a>.
+          </span>
+          <a href={STABILITY_DOC} rel="noopener">What stable means</a>
+        </p>
+      )
+    }
 
     <div class="split" style="padding-bottom:2rem">
       <div class="stack">
